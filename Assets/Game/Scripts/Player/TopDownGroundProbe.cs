@@ -12,6 +12,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float probeDistance = 0.35f;
         [SerializeField, Range(0.25f, 1f)] private float probeRadiusScale = 0.9f;
         [SerializeField, Range(1f, 89f)] private float maxSlopeAngle = 55f;
+        [SerializeField, Min(0f)] private float groundedDistanceTolerance = 0.08f;
 
         private CapsuleCollider capsuleCollider;
 
@@ -19,6 +20,7 @@ namespace RorType.Gameplay.Player
         public bool IsStableGround { get; private set; }
         public Vector3 GroundNormal { get; private set; } = Vector3.up;
         public Vector3 GroundPoint { get; private set; }
+        public float GroundDistance { get; private set; } = float.PositiveInfinity;
         public float SlopeAngle { get; private set; }
 
         private void Awake()
@@ -70,11 +72,12 @@ namespace RorType.Gameplay.Player
 
             if (hasValidHit)
             {
-                IsGrounded = true;
                 GroundPoint = bestHit.point;
                 GroundNormal = bestHit.normal.normalized;
+                GroundDistance = Mathf.Max(0f, (bottomHemisphereCenter - (Vector3.up * radius)).y - GroundPoint.y);
                 SlopeAngle = Vector3.Angle(GroundNormal, Vector3.up);
-                IsStableGround = SlopeAngle <= maxSlopeAngle;
+                IsGrounded = GroundDistance <= groundedDistanceTolerance;
+                IsStableGround = IsGrounded && SlopeAngle <= maxSlopeAngle;
                 return;
             }
 
@@ -82,6 +85,7 @@ namespace RorType.Gameplay.Player
             IsStableGround = false;
             GroundPoint = Vector3.zero;
             GroundNormal = Vector3.up;
+            GroundDistance = float.PositiveInfinity;
             SlopeAngle = 90f;
         }
 
@@ -113,7 +117,13 @@ namespace RorType.Gameplay.Player
 
         private int ResolveGroundMask()
         {
-            return groundMask.value == 0 ? Physics.AllLayers : groundMask.value;
+            if (groundMask.value != 0)
+            {
+                return groundMask.value;
+            }
+
+            var groundLayer = LayerMask.NameToLayer("Ground");
+            return groundLayer >= 0 ? 1 << groundLayer : 1 << 0;
         }
     }
 }

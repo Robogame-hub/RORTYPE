@@ -10,6 +10,7 @@ namespace RorType.Gameplay.Player
     {
         [Header("References")]
         [SerializeField] private Transform movementReference;
+        [SerializeField] private Transform visualRoot;
 
         [Header("Movement")]
         [SerializeField, Min(0f)] private float walkSpeed = 10f;
@@ -17,9 +18,9 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float acceleration = 60f;
         [SerializeField, Min(0f)] private float deceleration = 80f;
         [SerializeField, Range(0f, 1f)] private float airControlPercent = 0.5f;
-        [SerializeField, Min(0f)] private float groundedStickForce = 2f;
         [SerializeField, Min(0f)] private float extraFallGravity = 20f;
         [SerializeField, Min(0f)] private float groundSnapOffset = 0.02f;
+        [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
 
         [Header("Jump")]
         [SerializeField, Min(0f)] private float jumpSpeed = 8f;
@@ -48,6 +49,7 @@ namespace RorType.Gameplay.Player
         private bool dashQueued;
         private bool airDashConsumed;
         private bool isGroundedForLocomotion;
+        private bool hasVisualPosition;
 
         public Vector3 LastWorldMoveDirection { get; private set; } = Vector3.forward;
         public float CurrentSpeed { get; private set; }
@@ -81,6 +83,11 @@ namespace RorType.Gameplay.Player
                 dashQueued = true;
                 inputAdapter.ConsumeDashPressed();
             }
+        }
+
+        private void LateUpdate()
+        {
+            UpdateVisualSmoothing();
         }
 
         private void FixedUpdate()
@@ -160,6 +167,11 @@ namespace RorType.Gameplay.Player
             dashCooldownTimer = 0f;
             dashQueued = false;
             airDashConsumed = false;
+            hasVisualPosition = false;
+            if (visualRoot != null)
+            {
+                visualRoot.localPosition = Vector3.zero;
+            }
         }
 
         private Vector3 ResolveWorldMoveDirection(Vector2 moveInput)
@@ -223,6 +235,24 @@ namespace RorType.Gameplay.Player
             dashCooldownTimer = Mathf.Max(0f, dashCooldownTimer - deltaTime);
         }
 
+        private void UpdateVisualSmoothing()
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            if (!hasVisualPosition)
+            {
+                visualRoot.position = transform.position;
+                hasVisualPosition = true;
+                return;
+            }
+
+            var blend = 1f - Mathf.Exp(-visualPositionSharpness * Time.deltaTime);
+            visualRoot.position = Vector3.Lerp(visualRoot.position, transform.position, blend);
+        }
+
         private void RefreshGroundedState()
         {
             var probeStable = groundProbe.IsStableGround;
@@ -234,7 +264,7 @@ namespace RorType.Gameplay.Player
                 airDashConsumed = false;
                 if (!IsDashing)
                 {
-                    verticalVelocity = -groundedStickForce;
+                    verticalVelocity = 0f;
                 }
             }
         }

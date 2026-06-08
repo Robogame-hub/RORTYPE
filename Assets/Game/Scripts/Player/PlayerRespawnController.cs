@@ -8,7 +8,7 @@ namespace RorType.Gameplay.Player
     [RequireComponent(typeof(TopDownInputAdapter))]
     public sealed class PlayerRespawnController : MonoBehaviour
     {
-        [SerializeField] private float fallThresholdY = -10f;
+        [SerializeField, Min(0.1f)] private float fallDistance = 6f;
         [SerializeField, Min(0f)] private float safePointMinDistance = 1.5f;
         [SerializeField, Min(0.1f)] private float respawnHeightOffset = 1.05f;
 
@@ -41,7 +41,7 @@ namespace RorType.Gameplay.Player
 
         private void LateUpdate()
         {
-            if (transform.position.y <= fallThresholdY)
+            if (transform.position.y <= safePosition.y - fallDistance)
             {
                 RespawnToSafePoint();
             }

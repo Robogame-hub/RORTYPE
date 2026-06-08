@@ -9,9 +9,13 @@ namespace RorType.Gameplay.Player
         [SerializeField] private Vector3 lookOffset = new Vector3(0f, 1f, 0f);
         [SerializeField, Min(0.01f)] private float followSharpness = 8f;
 
+        private Vector3 smoothedTargetPosition;
+        private bool hasSmoothedTargetPosition;
+
         public void SetTarget(Transform newTarget)
         {
             target = newTarget;
+            hasSmoothedTargetPosition = false;
         }
 
         private void LateUpdate()
@@ -21,10 +25,19 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            var desiredPosition = target.position + followOffset;
             var blend = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
-            transform.position = Vector3.Lerp(transform.position, desiredPosition, blend);
-            transform.rotation = Quaternion.LookRotation((target.position + lookOffset) - transform.position, Vector3.up);
+            if (!hasSmoothedTargetPosition)
+            {
+                smoothedTargetPosition = target.position;
+                hasSmoothedTargetPosition = true;
+            }
+            else
+            {
+                smoothedTargetPosition = Vector3.Lerp(smoothedTargetPosition, target.position, blend);
+            }
+
+            transform.position = smoothedTargetPosition + followOffset;
+            transform.rotation = Quaternion.LookRotation((smoothedTargetPosition + lookOffset) - transform.position, Vector3.up);
         }
     }
 }
