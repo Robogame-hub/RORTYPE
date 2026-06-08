@@ -22,6 +22,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float shotInterval = 0.18f;
         [SerializeField, Min(0.1f)] private float projectileSpeed = 28f;
         [SerializeField, Min(0.01f)] private float projectileLifetime = 1.4f;
+        [SerializeField, Min(0.1f)] private float projectileMaxDistance = 20f;
         [SerializeField, Min(0.01f)] private float projectileRadius = 0.2f;
         [SerializeField, Min(0f)] private float projectileSpawnForwardOffset = 0.95f;
         [SerializeField] private Color projectileColor = new Color(0.86f, 0.14f, 0.14f);
@@ -54,6 +55,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float bounceScaleSharpness = 24f;
 
         private const int MeleeFistCount = 2;
+        private const float MeleeImpactProgress = 0.28f;
 
         private TopDownPlayerMotor motor;
         private Rigidbody body;
@@ -70,6 +72,7 @@ namespace RorType.Gameplay.Player
         private bool hasFeedbackBasePose;
         private readonly Transform[] meleeFists = new Transform[MeleeFistCount];
         private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
+        private readonly bool[] meleeFistImpactApplied = new bool[MeleeFistCount];
         private Collider[] meleeHitBuffer;
         private Component[] meleeUniqueHitBuffer;
 
@@ -79,6 +82,7 @@ namespace RorType.Gameplay.Player
             body = GetComponent<Rigidbody>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
             capsuleCollider = GetComponent<CapsuleCollider>();
+            visualRoot = ResolveVisualRoot();
             CacheFeedbackBasePose();
             EnsureMeleeFistsInitialized();
             EnsureMeleeHitBuffers();
@@ -104,6 +108,7 @@ namespace RorType.Gameplay.Player
             bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
             for (var i = 0; i < meleeFistPunchTimers.Length; i++)
             {
+                TryResolveMeleeImpact(i);
                 meleeFistPunchTimers[i] = Mathf.Max(0f, meleeFistPunchTimers[i] - Time.deltaTime);
             }
 
@@ -173,6 +178,25 @@ namespace RorType.Gameplay.Player
             return currentAimDirection;
         }
 
+        public bool TryGetAimPoint(out Vector3 worldAimPoint)
+        {
+            var aimOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var currentCamera = Camera.main;
+            if (currentCamera != null)
+            {
+                var aimRay = currentCamera.ScreenPointToRay(inputAdapter.MouseScreenPosition);
+                var aimPlane = new Plane(Vector3.up, aimOrigin);
+                if (aimPlane.Raycast(aimRay, out var enter))
+                {
+                    worldAimPoint = aimRay.GetPoint(Mathf.Min(enter, mouseAimRayDistance));
+                    return true;
+                }
+            }
+
+            worldAimPoint = aimOrigin + currentAimDirection;
+            return false;
+        }
+
         private void TryShoot()
         {
             var shouldShoot = shotQueued || (automaticFire && inputAdapter.FireHeld);
@@ -204,6 +228,7 @@ namespace RorType.Gameplay.Player
         {
             var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
             spawnOrigin += currentAimDirection * projectileSpawnForwardOffset;
+            var effectiveProjectileLifetime = ResolveProjectileLifetime(projectileSpeed, projectileLifetime, projectileMaxDistance);
 
             var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             projectile.name = "PlayerProjectile";
@@ -227,7 +252,7 @@ namespace RorType.Gameplay.Player
             projectileSphere.Initialize(
                 currentAimDirection,
                 projectileSpeed,
-                projectileLifetime,
+                effectiveProjectileLifetime,
                 projectileStretchMultiplier,
                 projectileSquashMultiplier,
                 projectileScaleRecoverySharpness,
@@ -248,8 +273,30 @@ namespace RorType.Gameplay.Player
             }
 
             meleeFistPunchTimers[fistIndex] = meleePunchDuration;
-            ApplyMeleeHit(fistIndex);
+            meleeFistImpactApplied[fistIndex] = false;
             TriggerBounce();
+        }
+
+        private void TryResolveMeleeImpact(int fistIndex)
+        {
+            if (fistIndex < 0 || fistIndex >= meleeFistPunchTimers.Length || meleeFistImpactApplied[fistIndex])
+            {
+                return;
+            }
+
+            if (meleePunchDuration <= 0f || meleeFistPunchTimers[fistIndex] <= 0f)
+            {
+                return;
+            }
+
+            var progress = 1f - (meleeFistPunchTimers[fistIndex] / meleePunchDuration);
+            if (progress < MeleeImpactProgress)
+            {
+                return;
+            }
+
+            meleeFistImpactApplied[fistIndex] = true;
+            ApplyMeleeHit(fistIndex);
         }
 
         private void UpdateMeleeFistVisuals()
@@ -421,6 +468,17 @@ namespace RorType.Gameplay.Player
             bounceTimer = bounceDuration;
         }
 
+        private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)
+        {
+            var effectiveLifetime = Mathf.Max(0.01f, configuredLifetime);
+            if (speed <= 0f || maxDistance <= 0f)
+            {
+                return effectiveLifetime;
+            }
+
+            return Mathf.Min(effectiveLifetime, maxDistance / speed);
+        }
+
         private void IgnorePlayerCollisions(Collider projectileCollider)
         {
             if (projectileCollider == null)
@@ -452,6 +510,7 @@ namespace RorType.Gameplay.Player
             for (var i = 0; i < meleeFistPunchTimers.Length; i++)
             {
                 meleeFistPunchTimers[i] = 0f;
+                meleeFistImpactApplied[i] = false;
             }
 
             var targetTransform = ResolveFeedbackTransform();
@@ -552,6 +611,47 @@ namespace RorType.Gameplay.Player
             }
 
             return transform;
+        }
+
+        private Transform ResolveVisualRoot()
+        {
+            if (visualRoot != null)
+            {
+                return visualRoot;
+            }
+
+            var childRenderer = GetComponentInChildren<Renderer>();
+            if (childRenderer != null && childRenderer.transform != transform)
+            {
+                return childRenderer.transform;
+            }
+
+            var rootRenderer = GetComponent<MeshRenderer>();
+            var rootMeshFilter = GetComponent<MeshFilter>();
+            if (rootRenderer != null && rootMeshFilter != null && rootMeshFilter.sharedMesh != null)
+            {
+                var runtimeVisual = transform.Find("RuntimeVisual");
+                if (runtimeVisual == null)
+                {
+                    var runtimeVisualObject = new GameObject("RuntimeVisual");
+                    runtimeVisualObject.transform.SetParent(transform, false);
+                    runtimeVisualObject.transform.localPosition = Vector3.zero;
+                    runtimeVisualObject.transform.localRotation = Quaternion.identity;
+                    runtimeVisualObject.transform.localScale = Vector3.one;
+
+                    var runtimeFilter = runtimeVisualObject.AddComponent<MeshFilter>();
+                    runtimeFilter.sharedMesh = rootMeshFilter.sharedMesh;
+
+                    var runtimeRenderer = runtimeVisualObject.AddComponent<MeshRenderer>();
+                    runtimeRenderer.sharedMaterials = rootRenderer.sharedMaterials;
+                    rootRenderer.enabled = false;
+                    runtimeVisual = runtimeVisualObject.transform;
+                }
+
+                return runtimeVisual;
+            }
+
+            return visualRoot;
         }
     }
 }

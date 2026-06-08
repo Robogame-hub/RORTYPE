@@ -11,6 +11,7 @@ GameObject:
   - component: {fileID: 8120257798234494895}
   - component: {fileID: 1381162044936312619}
   - component: {fileID: 2193844642569082842}
+  - component: {fileID: 7598556684385139731}
   - component: {fileID: 8190394492271339124}
   m_Layer: 0
   m_Name: EnemyMelee
@@ -81,10 +82,32 @@ Rigidbody:
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0
-  m_IsKinematic: 0
+  m_IsKinematic: 1
   m_Interpolate: 1
-  m_Constraints: 80
+  m_Constraints: 112
   m_CollisionDetection: 2
+--- !u!195 &7598556684385139731
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3615722631763545253}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 6.1
+  m_Acceleration: 24.4
+  avoidancePriority: 50
+  m_AngularSpeed: 540
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
 --- !u!114 &8190394492271339124
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -103,19 +126,21 @@ MonoBehaviour:
   overheadPresentation: {fileID: 0}
   baseColor: {r: 1, g: 0.48, b: 0.08, a: 1}
   maxHealth: 10
-  moveSpeed: 6.1
+  detectionRadius: 25
+  loseTargetRadius: 30
+  patrolRadius: 4
+  patrolPauseDuration: 0.8
+  navMeshSampleDistance: 2
+  moveSpeed: 10.2
   turnSpeedDegrees: 540
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 64
-  groundProbeHeight: 2.5
-  groundProbeDistance: 6
-  groundSnapOffset: 0.02
-  shooterAttackRadius: 9
+  shooterAttackRadius: 20
   shooterPreferredDistance: 6
-  shooterInterval: 2
+  shooterInterval: 0.85
+  shooterRadialInterval: 3
+  shooterRadialProjectileCount: 12
   shooterProjectileSpeed: 18
   shooterProjectileLifetime: 1.8
+  shooterProjectileMaxDistance: 20
   shooterProjectileRadius: 0.18
   shooterProjectileForwardOffset: 0.95
   shooterKnockbackForce: 2.6

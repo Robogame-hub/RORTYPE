@@ -1,6 +1,7 @@
 using UnityEditor;
 using UnityEngine;
 using RorType.Gameplay.AI;
+using UnityEngine.AI;
 
 namespace RorType.Gameplay.Editor
 {
@@ -22,10 +23,10 @@ namespace RorType.Gameplay.Editor
                 new Color(1f, 0.84f, 0.1f),
                 "Mat_enemy_shooter.mat",
                 5f,
-                5.2f,
-                9f,
+                10.4f,
+                20f,
                 6f,
-                2f,
+                0.85f,
                 1.65f,
                 0.5f,
                 1.9f,
@@ -38,10 +39,10 @@ namespace RorType.Gameplay.Editor
                 new Color(1f, 0.48f, 0.08f),
                 "Mat_enemy_melee.mat",
                 10f,
-                6.1f,
-                9f,
+                10.2f,
+                20f,
                 6f,
-                2f,
+                0.85f,
                 1.65f,
                 0.5f,
                 1.9f,
@@ -54,10 +55,10 @@ namespace RorType.Gameplay.Editor
                 new Color(0.6f, 0.22f, 0.92f),
                 "Mat_enemy_exploder.mat",
                 3f,
-                6.8f,
-                9f,
+                13.6f,
+                20f,
                 6f,
-                2f,
+                0.85f,
                 1.65f,
                 0.5f,
                 1.9f,
@@ -98,11 +99,21 @@ namespace RorType.Gameplay.Editor
             var body = root.AddComponent<Rigidbody>();
             body.mass = 55f;
             body.useGravity = false;
+            body.isKinematic = true;
             body.linearDamping = 0f;
             body.angularDamping = 0.05f;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
+
+            var navMeshAgent = root.AddComponent<NavMeshAgent>();
+            navMeshAgent.speed = moveSpeed;
+            navMeshAgent.acceleration = Mathf.Max(8f, moveSpeed * 4f);
+            navMeshAgent.angularSpeed = 540f;
+            navMeshAgent.updateRotation = false;
+            navMeshAgent.radius = collider.radius;
+            navMeshAgent.height = collider.height;
+            navMeshAgent.stoppingDistance = 0f;
 
             var visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             visual.name = "Visual";
@@ -185,11 +196,16 @@ namespace RorType.Gameplay.Editor
             serializedObject.FindProperty("visualRenderer").objectReferenceValue = visualRenderer;
             serializedObject.FindProperty("baseColor").colorValue = baseColor;
             serializedObject.FindProperty("maxHealth").floatValue = maxHealth;
+            serializedObject.FindProperty("detectionRadius").floatValue = 25f;
+            serializedObject.FindProperty("loseTargetRadius").floatValue = 30f;
+            serializedObject.FindProperty("patrolRadius").floatValue = 4f;
             serializedObject.FindProperty("moveSpeed").floatValue = moveSpeed;
-            serializedObject.FindProperty("groundMask").intValue = 1 << 6;
             serializedObject.FindProperty("shooterAttackRadius").floatValue = shooterAttackRadius;
             serializedObject.FindProperty("shooterPreferredDistance").floatValue = shooterPreferredDistance;
             serializedObject.FindProperty("shooterInterval").floatValue = shooterInterval;
+            serializedObject.FindProperty("shooterRadialInterval").floatValue = 3f;
+            serializedObject.FindProperty("shooterRadialProjectileCount").intValue = 12;
+            serializedObject.FindProperty("shooterProjectileMaxDistance").floatValue = 20f;
             serializedObject.FindProperty("meleeAttackRange").floatValue = meleeAttackRange;
             serializedObject.FindProperty("meleeInterval").floatValue = meleeInterval;
             serializedObject.FindProperty("explodeTriggerRange").floatValue = explodeTriggerRange;

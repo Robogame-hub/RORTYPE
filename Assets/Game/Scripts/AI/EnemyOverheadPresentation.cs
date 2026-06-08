@@ -9,8 +9,8 @@ namespace RorType.Gameplay.AI
     {
         [Header("Layout")]
         [SerializeField, Min(0f)] private float heightOffset = 1.7f;
-        [SerializeField, Min(0.01f)] private float healthBarWidth = 1.8f;
-        [SerializeField, Min(0.01f)] private float healthBarHeight = 0.08f;
+        [SerializeField, Min(0.01f)] private float healthBarWidth = 0.9f;
+        [SerializeField, Min(0.01f)] private float healthBarHeight = 0.16f;
         [SerializeField, Min(0.01f)] private float healthTextScale = 0.075f;
         [SerializeField, Min(0.01f)] private float damageTextScale = 0.09f;
 

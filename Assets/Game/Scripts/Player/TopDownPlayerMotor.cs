@@ -69,6 +69,7 @@ namespace RorType.Gameplay.Player
             capsuleCollider = GetComponent<CapsuleCollider>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
             groundProbe = GetComponent<TopDownGroundProbe>();
+            visualRoot = ResolveVisualRoot();
 
             body.useGravity = false;
             body.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
@@ -278,6 +279,13 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
+            if (visualRoot.parent == transform)
+            {
+                visualRoot.localPosition = Vector3.zero;
+                hasVisualPosition = false;
+                return;
+            }
+
             if (!hasVisualPosition)
             {
                 visualRoot.position = transform.position;
@@ -383,6 +391,47 @@ namespace RorType.Gameplay.Player
         private float GetDashSpeed()
         {
             return dashDistance / dashDuration;
+        }
+
+        private Transform ResolveVisualRoot()
+        {
+            if (visualRoot != null)
+            {
+                return visualRoot;
+            }
+
+            var childRenderer = GetComponentInChildren<Renderer>();
+            if (childRenderer != null && childRenderer.transform != transform)
+            {
+                return childRenderer.transform;
+            }
+
+            var rootRenderer = GetComponent<MeshRenderer>();
+            var rootMeshFilter = GetComponent<MeshFilter>();
+            if (rootRenderer != null && rootMeshFilter != null && rootMeshFilter.sharedMesh != null)
+            {
+                var runtimeVisual = transform.Find("RuntimeVisual");
+                if (runtimeVisual == null)
+                {
+                    var runtimeVisualObject = new GameObject("RuntimeVisual");
+                    runtimeVisualObject.transform.SetParent(transform, false);
+                    runtimeVisualObject.transform.localPosition = Vector3.zero;
+                    runtimeVisualObject.transform.localRotation = Quaternion.identity;
+                    runtimeVisualObject.transform.localScale = Vector3.one;
+
+                    var runtimeFilter = runtimeVisualObject.AddComponent<MeshFilter>();
+                    runtimeFilter.sharedMesh = rootMeshFilter.sharedMesh;
+
+                    var runtimeRenderer = runtimeVisualObject.AddComponent<MeshRenderer>();
+                    runtimeRenderer.sharedMaterials = rootRenderer.sharedMaterials;
+                    runtimeVisual = runtimeVisualObject.transform;
+                }
+
+                rootRenderer.enabled = false;
+                return runtimeVisual;
+            }
+
+            return visualRoot;
         }
     }
 }

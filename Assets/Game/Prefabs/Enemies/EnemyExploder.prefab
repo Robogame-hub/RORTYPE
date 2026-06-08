@@ -101,6 +101,7 @@ GameObject:
   - component: {fileID: 2636921008625549500}
   - component: {fileID: 677717259347078173}
   - component: {fileID: 5816590518377428233}
+  - component: {fileID: 130388523340314993}
   - component: {fileID: 8645658412658671139}
   m_Layer: 0
   m_Name: EnemyExploder
@@ -171,10 +172,32 @@ Rigidbody:
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
   m_UseGravity: 0
-  m_IsKinematic: 0
+  m_IsKinematic: 1
   m_Interpolate: 1
-  m_Constraints: 80
+  m_Constraints: 112
   m_CollisionDetection: 2
+--- !u!195 &130388523340314993
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1631855103260934818}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 6.8
+  m_Acceleration: 27.2
+  avoidancePriority: 50
+  m_AngularSpeed: 540
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
 --- !u!114 &8645658412658671139
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -193,19 +216,21 @@ MonoBehaviour:
   overheadPresentation: {fileID: 0}
   baseColor: {r: 0.6, g: 0.22, b: 0.92, a: 1}
   maxHealth: 3
-  moveSpeed: 6.8
+  detectionRadius: 25
+  loseTargetRadius: 30
+  patrolRadius: 4
+  patrolPauseDuration: 0.8
+  navMeshSampleDistance: 2
+  moveSpeed: 13.6
   turnSpeedDegrees: 540
-  groundMask:
-    serializedVersion: 2
-    m_Bits: 64
-  groundProbeHeight: 2.5
-  groundProbeDistance: 6
-  groundSnapOffset: 0.02
-  shooterAttackRadius: 9
+  shooterAttackRadius: 20
   shooterPreferredDistance: 6
-  shooterInterval: 2
+  shooterInterval: 0.85
+  shooterRadialInterval: 3
+  shooterRadialProjectileCount: 12
   shooterProjectileSpeed: 18
   shooterProjectileLifetime: 1.8
+  shooterProjectileMaxDistance: 20
   shooterProjectileRadius: 0.18
   shooterProjectileForwardOffset: 0.95
   shooterKnockbackForce: 2.6

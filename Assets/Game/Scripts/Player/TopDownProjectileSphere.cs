@@ -76,6 +76,7 @@ namespace RorType.Gameplay.Player
             sourceTeam = team;
 
             body.useGravity = false;
+            body.isKinematic = false;
             body.linearDamping = 0f;
             body.angularDamping = 0f;
             body.constraints = RigidbodyConstraints.FreezeRotation;
@@ -101,9 +102,19 @@ namespace RorType.Gameplay.Player
 
         private void OnTriggerEnter(Collider other)
         {
+            if (other == null)
+            {
+                return;
+            }
+
             if (TryApplyHit(other, other.ClosestPoint(transform.position)))
             {
                 Destroy(gameObject);
+                return;
+            }
+
+            if (other.isTrigger)
+            {
                 return;
             }
 

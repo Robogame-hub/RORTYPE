@@ -254,7 +254,7 @@
   - атаки врагов сейчас нужны для читаемого поведения и фидбэка, а не для полноценного двустороннего damage-loop
   - при этом атаки врагов теперь могут заметно, но не слишком сильно отталкивать игрока через отдельный канал knockback без снятия HP
 - В проекте созданы реальные prefab-ассеты трёх капсульных врагов для ручной расстановки:
-  - `Assets/Game/Prefabs/Enemies/EnemyShooter.prefab` — жёлтый стрелок, радиусная стрельба раз в 2 секунды, `HP = 5`
+  - `Assets/Game/Prefabs/Enemies/EnemyShooter.prefab` — жёлтый стрелок, частая прицельная стрельба и круговой залп раз в 3 секунды, `HP = 5`
   - `Assets/Game/Prefabs/Enemies/EnemyMelee.prefab` — оранжевый melee-враг, удар 2 раза в секунду вблизи, `HP = 10`
   - `Assets/Game/Prefabs/Enemies/EnemyExploder.prefab` — фиолетовый взрывной враг, перед подрывом 3 раза мигает красным, `HP = 3`
 - Общий фидбэк текущего enemy MVP:
@@ -266,3 +266,59 @@
 - Для prefab-пайплайна принят editor-builder:
   - `Assets/Game/Editor/EnemyPrefabBuilder.cs`
   - prefab- и material-ассеты собираются через Unity batchmode или меню `RORTYPE/Build Enemy Prefabs`
+
+## Обновление реализации на 2026-06-08: NavMesh и spawn zone
+
+- Текущая реализация врагов переведена на `NavMeshAgent`:
+  - `EnemyCapsuleController` больше не ходит прямым `Rigidbody.MovePosition`
+  - враги патрулируют между двумя navmesh-точками вокруг своего якоря, пока не обнаружат игрока
+  - радиус первичного обнаружения игрока принят `25` метров
+  - после захвата цели враг удерживает бой до удаления игрока дальше `30` метров
+- Для стрельбы принят единый рабочий лимит дальности `20` метров:
+  - у игрока effective lifetime снаряда теперь дополнительно ограничивается расчётом `distance / speed`
+  - у стрелка-врага используется такой же подход через effective lifetime
+  - `EnemyShooter` переведён на `shooterAttackRadius = 20`
+- В проект добавлена заготовка зоны спавна врагов:
+  - `Assets/Game/Scripts/AI/EnemySpawnZone.cs`
+  - `Assets/Game/Scripts/AI/EnemySpawnPoint.cs`
+  - зона активируется, когда игрок входит в trigger-объём
+  - по умолчанию лимит активных врагов в зоне `25`
+  - спавн идёт со случайным интервалом в диапазоне `8-12` секунд вокруг целевых `10` секунд
+  - тип врага выбирается по весам: melee `50`, shooter `30`, exploder `20`
+- Для prefab workflow добавлен builder зоны спавна:
+  - `Assets/Game/Editor/SpawnZonePrefabBuilder.cs`
+  - целевой prefab-путь: `Assets/Game/Prefabs/Spawning/EnemySpawnZone.prefab`
+- Runtime HP bar врагов скорректирован под новое требование:
+  - высота увеличена в 2 раза
+  - длина уменьшена в 2 раза
+## Принятое рабочее решение: баланс combat sandbox на 2026-06-08
+
+- Стрельба игрока и врагов должна игнорировать служебные trigger-объёмы вроде `EnemySpawnZone`; пуля не должна уничтожаться просто от входа в зону спавна.
+- Для текущего sandbox зафиксирован более агрессивный spawn baseline:
+  - `EnemySpawnZone`: `maxActiveEnemies = 40`
+  - `EnemySpawnZone`: интервал `3.5 - 6` секунд
+  - `EnemySpawnZone`: `spawnPointBlockedRadius = 0.8`
+- `EnemySpawnPoint` теперь масштабирует интенсивность от собственного `Transform`:
+  - больший scale по X/Z даёт больший радиус появления
+  - больший scale по X/Z даёт burst-спавн `1-4` врага за тик
+- Текущий рабочий баланс скоростей:
+  - `EnemyShooter.moveSpeed = 10.4`
+  - `EnemyExploder.moveSpeed = 13.6`
+- Актуальная сводная таблица баланса вынесена в `docs/project-documentation.md`.
+## Принятое рабочее решение: combat sandbox revision 2 на 2026-06-08
+
+- `EnemyShooter` сохраняет обычный прицельный выстрел и дополнительно каждые `3` секунды выпускает круговой залп.
+- Enemy projectiles должны проходить сквозь других противников и не тратиться на friendly collision; валидные цели для них сейчас — игрок и препятствия.
+- Для текущего sandbox приняты новые базовые дальности:
+  - стрельба игрока: `20 м`
+  - стрельба стрелка-врага: `20 м`
+  - обнаружение врагов: `25 м`
+  - disengage/lose target radius: `30 м`
+- Текущий рабочий баланс скоростей и темпа:
+  - `EnemyShooter.moveSpeed = 10.4`
+  - `EnemyShooter.shooterInterval = 0.85`
+  - `EnemyMelee.moveSpeed = 10.2`
+  - `EnemyExploder.moveSpeed = 13.6`
+- Для старых сцен, где у игрока не назначен `visualRoot` и используется видимый physics-root capsule, player runtime теперь сам создаёт дочерний `RuntimeVisual` из root mesh/material и отключает root renderer, чтобы убрать дёргание от вращения/движения физического root.
+- Для scene-local игрока в `Assets/Game/Scene/Level_1.unity` зафиксирован `groundSnapOffset = 0.02`, как в рабочем prefab, чтобы grounded-перемещение не дрожало на контакте с поверхностью.
+- Камера получила cursor-lookahead поверх текущего follow-lag; базовое запаздывание камеры оставлено без смены принципа.

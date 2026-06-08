@@ -70,6 +70,7 @@ namespace RorType.Gameplay.AI
             instigatorRoot = instigator;
 
             body.useGravity = false;
+            body.isKinematic = false;
             body.linearDamping = 0f;
             body.angularDamping = 0f;
             body.constraints = RigidbodyConstraints.FreezeRotation;
@@ -90,6 +91,11 @@ namespace RorType.Gameplay.AI
 
         private void OnTriggerEnter(Collider other)
         {
+            if (other == null)
+            {
+                return;
+            }
+
             ConsumeImpact(other);
         }
 
@@ -101,6 +107,17 @@ namespace RorType.Gameplay.AI
             }
 
             if (other != null && instigatorRoot != null && other.transform.root == instigatorRoot)
+            {
+                return;
+            }
+
+            if (CombatUtility.TryGetDamageable(other, out var damageable, out _)
+                && damageable.Team == CombatTeam.Enemy)
+            {
+                return;
+            }
+
+            if (other != null && other.isTrigger && other.GetComponentInParent<IKnockbackReceiver>() == null)
             {
                 return;
             }

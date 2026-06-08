@@ -2,13 +2,23 @@ using System.Collections;
 using RorType.Gameplay.Combat;
 using RorType.Gameplay.Player;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace RorType.Gameplay.AI
 {
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(CapsuleCollider))]
+    [RequireComponent(typeof(NavMeshAgent))]
     public sealed class EnemyCapsuleController : MonoBehaviour, IDamageable
     {
+        private const int MeleeFistCount = 2;
+        private const float DefaultDetectionRadius = 25f;
+        private const float DefaultLoseTargetRadius = 30f;
+        private const float DefaultPatrolRadius = 4f;
+        private const float DefaultShooterAttackRadius = 20f;
+        private const float DefaultProjectileMaxDistance = 20f;
+        private const float DestinationUpdateThreshold = 0.2f;
+
         [Header("Identity")]
         [SerializeField] private EnemyCapsuleArchetype archetype = EnemyCapsuleArchetype.Shooter;
         [SerializeField] private Transform visualRoot;
@@ -19,20 +29,26 @@ namespace RorType.Gameplay.AI
         [Header("Vitals")]
         [SerializeField, Min(1f)] private float maxHealth = 5f;
 
+        [Header("Awareness")]
+        [SerializeField, Min(0.1f)] private float detectionRadius = DefaultDetectionRadius;
+        [SerializeField, Min(0.1f)] private float loseTargetRadius = DefaultLoseTargetRadius;
+        [SerializeField, Min(0f)] private float patrolRadius = DefaultPatrolRadius;
+        [SerializeField, Min(0f)] private float patrolPauseDuration = 0.8f;
+        [SerializeField, Min(0.1f)] private float navMeshSampleDistance = 2f;
+
         [Header("Movement")]
         [SerializeField, Min(0f)] private float moveSpeed = 5.5f;
         [SerializeField, Min(0f)] private float turnSpeedDegrees = 540f;
-        [SerializeField] private LayerMask groundMask;
-        [SerializeField, Min(0.1f)] private float groundProbeHeight = 2.5f;
-        [SerializeField, Min(0.1f)] private float groundProbeDistance = 6f;
-        [SerializeField, Min(0f)] private float groundSnapOffset = 0.02f;
 
         [Header("Shooter")]
-        [SerializeField, Min(0.1f)] private float shooterAttackRadius = 9f;
+        [SerializeField, Min(0.1f)] private float shooterAttackRadius = DefaultShooterAttackRadius;
         [SerializeField, Min(0.1f)] private float shooterPreferredDistance = 6f;
-        [SerializeField, Min(0.01f)] private float shooterInterval = 2f;
+        [SerializeField, Min(0.01f)] private float shooterInterval = 0.85f;
+        [SerializeField, Min(0.01f)] private float shooterRadialInterval = 3f;
+        [SerializeField, Min(3)] private int shooterRadialProjectileCount = 12;
         [SerializeField, Min(0.1f)] private float shooterProjectileSpeed = 18f;
         [SerializeField, Min(0.01f)] private float shooterProjectileLifetime = 1.8f;
+        [SerializeField, Min(0.1f)] private float shooterProjectileMaxDistance = DefaultProjectileMaxDistance;
         [SerializeField, Min(0.01f)] private float shooterProjectileRadius = 0.18f;
         [SerializeField, Min(0f)] private float shooterProjectileForwardOffset = 0.95f;
         [SerializeField, Min(0f)] private float shooterKnockbackForce = 2.6f;
@@ -69,24 +85,33 @@ namespace RorType.Gameplay.AI
         [SerializeField] private Color hitFlashColor = Color.white;
         [SerializeField, Min(1)] private int hitFlashCount = 3;
         [SerializeField, Min(0.01f)] private float hitFlashInterval = 0.05f;
-        private const int MeleeFistCount = 2;
 
         private Rigidbody body;
         private CapsuleCollider capsuleCollider;
+        private NavMeshAgent navMeshAgent;
         private Transform target;
         private TopDownPlayerMotor playerMotor;
         private Material runtimeMaterialInstance;
         private Vector3 feedbackBaseLocalScale = Vector3.one;
-        private float currentHealth;
-        private float attackCooldownTimer;
-        private float bounceTimer;
-        private bool isDead;
-        private bool isWarningExplosion;
-        private Coroutine hitFlashRoutine;
-        private Coroutine explosionRoutine;
-        private int nextMeleeFistIndex;
+        private Vector3 patrolAnchor;
+        private readonly Vector3[] patrolPoints = new Vector3[2];
         private readonly Transform[] meleeFists = new Transform[MeleeFistCount];
         private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
+        private Vector3 lastRequestedDestination;
+        private float lastRequestedStoppingDistance = -1f;
+        private float currentHealth;
+        private float attackCooldownTimer;
+        private float shooterRadialCooldownTimer;
+        private float bounceTimer;
+        private float patrolPauseTimer;
+        private bool isDead;
+        private bool isWarningExplosion;
+        private bool hasDetectedTarget;
+        private bool hasPatrolRoute;
+        private int currentPatrolPointIndex;
+        private int nextMeleeFistIndex;
+        private Coroutine hitFlashRoutine;
+        private Coroutine explosionRoutine;
 
         public CombatTeam Team => CombatTeam.Enemy;
         public bool IsAlive => !isDead;
@@ -95,11 +120,13 @@ namespace RorType.Gameplay.AI
         {
             body = GetComponent<Rigidbody>();
             capsuleCollider = GetComponent<CapsuleCollider>();
+            navMeshAgent = GetComponent<NavMeshAgent>();
 
             body.useGravity = false;
+            body.isKinematic = true;
             body.linearDamping = 0f;
-            body.angularDamping = 0.05f;
-            body.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            body.angularDamping = 0f;
+            body.constraints = RigidbodyConstraints.FreezeRotation;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
@@ -127,8 +154,11 @@ namespace RorType.Gameplay.AI
                 feedbackBaseLocalScale = visualRoot.localScale;
             }
 
+            ConfigureNavMeshAgent();
             InitializeMaterialInstance();
+
             currentHealth = maxHealth;
+            patrolAnchor = transform.position;
             ApplyRestingColor();
             overheadPresentation?.SetHealth(currentHealth, maxHealth);
 
@@ -139,6 +169,12 @@ namespace RorType.Gameplay.AI
             }
         }
 
+        private void Start()
+        {
+            RefreshNavMeshPosition();
+            SetPatrolAnchor(patrolAnchor);
+        }
+
         private void Update()
         {
             if (isDead)
@@ -147,7 +183,9 @@ namespace RorType.Gameplay.AI
             }
 
             attackCooldownTimer = Mathf.Max(0f, attackCooldownTimer - Time.deltaTime);
+            shooterRadialCooldownTimer = Mathf.Max(0f, shooterRadialCooldownTimer - Time.deltaTime);
             bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
+            patrolPauseTimer = Mathf.Max(0f, patrolPauseTimer - Time.deltaTime);
 
             if (archetype == EnemyCapsuleArchetype.Melee)
             {
@@ -173,21 +211,34 @@ namespace RorType.Gameplay.AI
                 return;
             }
 
+            RefreshNavMeshPosition();
+
             if (target == null)
             {
                 ResolveTarget();
-                if (target == null)
-                {
-                    return;
-                }
             }
 
-            var toTarget = target.position - body.position;
+            if (target == null)
+            {
+                hasDetectedTarget = false;
+                TickPatrol();
+                RotateVisual(GetPatrolFacingDirection());
+                return;
+            }
+
+            var toTarget = target.position - transform.position;
             toTarget.y = 0f;
             var distanceToTarget = toTarget.magnitude;
-            var directionToTarget = distanceToTarget > 0.0001f ? toTarget / distanceToTarget : Vector3.forward;
+            var directionToTarget = distanceToTarget > 0.0001f ? toTarget / distanceToTarget : GetPatrolFacingDirection();
 
-            RotateVisual(directionToTarget);
+            UpdateAwareness(distanceToTarget);
+
+            if (!hasDetectedTarget)
+            {
+                TickPatrol();
+                RotateVisual(GetPatrolFacingDirection());
+                return;
+            }
 
             switch (archetype)
             {
@@ -201,6 +252,17 @@ namespace RorType.Gameplay.AI
                     TickExploder(distanceToTarget, directionToTarget);
                     break;
             }
+
+            RotateVisual(directionToTarget);
+        }
+
+        public void SetPatrolAnchor(Vector3 anchor)
+        {
+            patrolAnchor = TrySampleNavMeshPosition(anchor, navMeshSampleDistance, out var sampledAnchor)
+                ? sampledAnchor
+                : anchor;
+
+            BuildPatrolRoute();
         }
 
         public bool ReceiveHit(in CombatHitInfo hitInfo)
@@ -215,6 +277,14 @@ namespace RorType.Gameplay.AI
             overheadPresentation?.SpawnDamageNumber(hitInfo.Damage, hitInfo.Point);
             PlayHitFlash();
 
+            var hitSource = hitInfo.Instigator != null ? hitInfo.Instigator.transform : null;
+            if (hitSource != null)
+            {
+                target = hitSource.root;
+                playerMotor = target.GetComponentInParent<TopDownPlayerMotor>();
+                hasDetectedTarget = true;
+            }
+
             if (currentHealth <= 0f)
             {
                 Die();
@@ -225,15 +295,31 @@ namespace RorType.Gameplay.AI
 
         private void TickShooter(float distanceToTarget, Vector3 directionToTarget)
         {
-            var shouldAdvance = distanceToTarget > shooterPreferredDistance;
-            var shouldRetreat = distanceToTarget < shooterPreferredDistance * 0.65f;
-            var moveDirection = shouldAdvance
-                ? directionToTarget
-                : (shouldRetreat ? -directionToTarget : Vector3.zero);
+            var preferredDistance = Mathf.Max(0.1f, shooterPreferredDistance);
+            if (distanceToTarget > preferredDistance)
+            {
+                MoveToWorldPoint(target.position, preferredDistance * 0.9f);
+            }
+            else if (distanceToTarget < preferredDistance * 0.65f)
+            {
+                var retreatTarget = transform.position - (directionToTarget * Mathf.Max(1f, preferredDistance - distanceToTarget + 0.75f));
+                if (!MoveToWorldPoint(retreatTarget, 0.1f))
+                {
+                    StopNavigation();
+                }
+            }
+            else
+            {
+                StopNavigation();
+            }
 
-            MoveOnGround(moveDirection, moveSpeed);
+            if (distanceToTarget <= GetShooterAttackRadius() && shooterRadialCooldownTimer <= 0f)
+            {
+                shooterRadialCooldownTimer = shooterRadialInterval;
+                FireRadialVolley(directionToTarget);
+            }
 
-            if (distanceToTarget <= shooterAttackRadius && attackCooldownTimer <= 0f)
+            if (distanceToTarget <= GetShooterAttackRadius() && attackCooldownTimer <= 0f)
             {
                 attackCooldownTimer = shooterInterval;
                 FireProjectile(directionToTarget);
@@ -244,11 +330,11 @@ namespace RorType.Gameplay.AI
         {
             if (distanceToTarget > meleeAttackRange)
             {
-                MoveOnGround(directionToTarget, moveSpeed);
+                MoveToWorldPoint(target.position, meleeAttackRange * 0.85f);
                 return;
             }
 
-            MoveOnGround(Vector3.zero, 0f);
+            StopNavigation();
             if (attackCooldownTimer <= 0f)
             {
                 attackCooldownTimer = meleeInterval;
@@ -262,29 +348,96 @@ namespace RorType.Gameplay.AI
         {
             if (isWarningExplosion)
             {
-                MoveOnGround(Vector3.zero, 0f);
+                StopNavigation();
                 return;
             }
 
             if (distanceToTarget > explodeTriggerRange)
             {
-                MoveOnGround(directionToTarget, moveSpeed);
+                MoveToWorldPoint(target.position, explodeTriggerRange * 0.85f);
                 return;
             }
 
-            explosionRoutine = StartCoroutine(PlayExplosionWarningRoutine());
+            StopNavigation();
+            if (explosionRoutine == null)
+            {
+                explosionRoutine = StartCoroutine(PlayExplosionWarningRoutine());
+            }
+        }
+
+        private void TickPatrol()
+        {
+            if (!hasPatrolRoute)
+            {
+                BuildPatrolRoute();
+            }
+
+            if (!hasPatrolRoute)
+            {
+                StopNavigation();
+                return;
+            }
+
+            if (patrolPauseTimer > 0f)
+            {
+                StopNavigation();
+                return;
+            }
+
+            var targetPatrolPoint = patrolPoints[currentPatrolPointIndex];
+            if (!MoveToWorldPoint(targetPatrolPoint, 0.1f))
+            {
+                patrolPauseTimer = patrolPauseDuration;
+                currentPatrolPointIndex = (currentPatrolPointIndex + 1) % patrolPoints.Length;
+                return;
+            }
+
+            if (!navMeshAgent.pathPending && navMeshAgent.remainingDistance <= Mathf.Max(0.15f, navMeshAgent.stoppingDistance + 0.05f))
+            {
+                StopNavigation();
+                patrolPauseTimer = patrolPauseDuration;
+                currentPatrolPointIndex = (currentPatrolPointIndex + 1) % patrolPoints.Length;
+            }
         }
 
         private void FireProjectile(Vector3 directionToTarget)
         {
+            SpawnProjectile(directionToTarget, "Projectile");
+            TriggerAttackBounce();
+        }
+
+        private void FireRadialVolley(Vector3 directionToTarget)
+        {
+            var projectileCount = Mathf.Max(3, shooterRadialProjectileCount);
+            var baseDirection = directionToTarget.sqrMagnitude > 0.0001f ? directionToTarget.normalized : transform.forward;
+            var baseAngle = Mathf.Atan2(baseDirection.x, baseDirection.z) * Mathf.Rad2Deg;
+            var stepAngle = 360f / projectileCount;
+
+            for (var i = 0; i < projectileCount; i++)
+            {
+                var shotAngle = baseAngle + (stepAngle * i);
+                var radialDirection = Quaternion.Euler(0f, shotAngle, 0f) * Vector3.forward;
+                SpawnProjectile(radialDirection, "RadialProjectile");
+            }
+
+            TriggerAttackBounce();
+        }
+
+        private void SpawnProjectile(Vector3 shotDirection, string projectileNameSuffix)
+        {
+            var projectileDirection = shotDirection.sqrMagnitude > 0.0001f ? shotDirection.normalized : transform.forward;
             var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
-            spawnOrigin += directionToTarget * shooterProjectileForwardOffset;
+            spawnOrigin += projectileDirection * shooterProjectileForwardOffset;
+            var effectiveProjectileLifetime = ResolveProjectileLifetime(
+                shooterProjectileSpeed,
+                shooterProjectileLifetime,
+                shooterProjectileMaxDistance);
 
             var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            projectile.name = $"{name}_Projectile";
+            projectile.name = $"{name}_{projectileNameSuffix}";
             projectile.transform.SetPositionAndRotation(
                 spawnOrigin,
-                Quaternion.LookRotation(directionToTarget, Vector3.up));
+                Quaternion.LookRotation(projectileDirection, Vector3.up));
             projectile.transform.localScale = Vector3.one * (shooterProjectileRadius * 2f);
 
             var projectileCollider = projectile.GetComponent<SphereCollider>();
@@ -298,17 +451,16 @@ namespace RorType.Gameplay.AI
             }
 
             IgnoreOwnCollisions(projectileCollider);
+            IgnoreEnemyCollisions(projectileCollider);
             projectileSphere.Initialize(
-                directionToTarget,
+                projectileDirection,
                 shooterProjectileSpeed,
-                shooterProjectileLifetime,
+                effectiveProjectileLifetime,
                 1.6f,
                 0.74f,
                 10f,
                 shooterKnockbackForce,
                 transform.root);
-
-            TriggerAttackBounce();
         }
 
         private IEnumerator PlayExplosionWarningRoutine()
@@ -357,50 +509,159 @@ namespace RorType.Gameplay.AI
                 explodeVisualLifetime);
         }
 
-        private void MoveOnGround(Vector3 moveDirection, float speed)
+        private void ConfigureNavMeshAgent()
         {
-            var planarDirection = moveDirection;
-            planarDirection.y = 0f;
-            if (planarDirection.sqrMagnitude > 0.0001f)
-            {
-                planarDirection.Normalize();
-            }
-
-            var nextPosition = body.position + (planarDirection * speed * Time.fixedDeltaTime);
-            nextPosition.y = ResolveGroundedBodyPositionY(nextPosition);
-            body.MovePosition(nextPosition);
-        }
-
-        private void RotateVisual(Vector3 directionToTarget)
-        {
-            if (directionToTarget.sqrMagnitude <= 0.0001f || visualRoot == null)
+            if (navMeshAgent == null)
             {
                 return;
             }
 
-            var targetRotation = Quaternion.LookRotation(directionToTarget, Vector3.up);
-            visualRoot.rotation = Quaternion.RotateTowards(
-                visualRoot.rotation,
-                targetRotation,
-                turnSpeedDegrees * Time.fixedDeltaTime);
+            navMeshAgent.speed = moveSpeed;
+            navMeshAgent.acceleration = Mathf.Max(8f, moveSpeed * 4f);
+            navMeshAgent.angularSpeed = turnSpeedDegrees;
+            navMeshAgent.autoBraking = true;
+            navMeshAgent.updateRotation = false;
+            navMeshAgent.radius = capsuleCollider != null ? capsuleCollider.radius : 0.5f;
+            navMeshAgent.height = capsuleCollider != null ? capsuleCollider.height : 2f;
+            navMeshAgent.baseOffset = GetBottomToPivotDistance();
+            navMeshAgent.stoppingDistance = 0f;
         }
 
-        private float ResolveGroundedBodyPositionY(Vector3 referencePosition)
+        private void RefreshNavMeshPosition()
         {
-            var probeMask = groundMask.value == 0 ? Physics.DefaultRaycastLayers : groundMask.value;
-            var rayOrigin = referencePosition + (Vector3.up * groundProbeHeight);
-            if (!Physics.Raycast(
-                    rayOrigin,
-                    Vector3.down,
-                    out var hit,
-                    groundProbeHeight + groundProbeDistance,
-                    probeMask,
-                    QueryTriggerInteraction.Ignore))
+            if (navMeshAgent == null)
             {
-                return body.position.y;
+                return;
             }
 
-            return hit.point.y + GetBottomToPivotDistance() + groundSnapOffset;
+            ConfigureNavMeshAgent();
+
+            if (navMeshAgent.isOnNavMesh)
+            {
+                return;
+            }
+
+            if (TrySampleNavMeshPosition(transform.position, navMeshSampleDistance, out var navMeshPosition))
+            {
+                transform.position = navMeshPosition + (Vector3.up * GetBottomToPivotDistance());
+            }
+        }
+
+        private void UpdateAwareness(float distanceToTarget)
+        {
+            if (distanceToTarget <= GetDetectionRadius())
+            {
+                hasDetectedTarget = true;
+                return;
+            }
+
+            if (hasDetectedTarget && distanceToTarget > GetLoseTargetRadius())
+            {
+                hasDetectedTarget = false;
+                StopNavigation();
+            }
+        }
+
+        private void BuildPatrolRoute()
+        {
+            var pointA = TryGetRandomPatrolPoint(out var sampledA) ? sampledA : patrolAnchor;
+            var pointB = TryGetRandomPatrolPoint(pointA, out var sampledB) ? sampledB : patrolAnchor;
+
+            patrolPoints[0] = pointA;
+            patrolPoints[1] = pointB;
+            currentPatrolPointIndex = 0;
+            patrolPauseTimer = 0f;
+            hasPatrolRoute = true;
+        }
+
+        private bool TryGetRandomPatrolPoint(out Vector3 patrolPoint)
+        {
+            return TryGetRandomPatrolPoint(Vector3.zero, false, out patrolPoint);
+        }
+
+        private bool TryGetRandomPatrolPoint(Vector3 avoidPoint, out Vector3 patrolPoint)
+        {
+            return TryGetRandomPatrolPoint(avoidPoint, true, out patrolPoint);
+        }
+
+        private bool TryGetRandomPatrolPoint(Vector3 avoidPoint, bool hasAvoidPoint, out Vector3 patrolPoint)
+        {
+            var radius = GetPatrolRadius();
+            if (radius <= 0f)
+            {
+                patrolPoint = patrolAnchor;
+                return TrySampleNavMeshPosition(patrolAnchor, navMeshSampleDistance, out patrolPoint);
+            }
+
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                var randomOffset = Random.insideUnitCircle * radius;
+                var candidate = patrolAnchor + new Vector3(randomOffset.x, 0f, randomOffset.y);
+                if (!TrySampleNavMeshPosition(candidate, navMeshSampleDistance + radius, out var sampledPoint))
+                {
+                    continue;
+                }
+
+                if (hasAvoidPoint && Vector3.Distance(sampledPoint, avoidPoint) < 1f)
+                {
+                    continue;
+                }
+
+                patrolPoint = sampledPoint;
+                return true;
+            }
+
+            patrolPoint = patrolAnchor;
+            return TrySampleNavMeshPosition(patrolAnchor, navMeshSampleDistance + radius, out patrolPoint);
+        }
+
+        private bool MoveToWorldPoint(Vector3 worldPoint, float stoppingDistance)
+        {
+            if (navMeshAgent == null || !navMeshAgent.isOnNavMesh)
+            {
+                return false;
+            }
+
+            if (!TrySampleNavMeshPosition(worldPoint, navMeshSampleDistance + Mathf.Max(0.25f, stoppingDistance), out var sampledDestination))
+            {
+                return false;
+            }
+
+            var clampedStoppingDistance = Mathf.Max(0f, stoppingDistance);
+            if (!navMeshAgent.isStopped
+                && Vector3.Distance(lastRequestedDestination, sampledDestination) <= DestinationUpdateThreshold
+                && Mathf.Abs(lastRequestedStoppingDistance - clampedStoppingDistance) <= 0.05f)
+            {
+                return true;
+            }
+
+            navMeshAgent.isStopped = false;
+            navMeshAgent.stoppingDistance = clampedStoppingDistance;
+            if (!navMeshAgent.SetDestination(sampledDestination))
+            {
+                return false;
+            }
+
+            lastRequestedDestination = sampledDestination;
+            lastRequestedStoppingDistance = clampedStoppingDistance;
+            return true;
+        }
+
+        private void StopNavigation()
+        {
+            if (navMeshAgent == null)
+            {
+                return;
+            }
+
+            if (navMeshAgent.isOnNavMesh)
+            {
+                navMeshAgent.isStopped = true;
+                navMeshAgent.ResetPath();
+            }
+
+            lastRequestedStoppingDistance = -1f;
+            lastRequestedDestination = transform.position;
         }
 
         private float GetBottomToPivotDistance()
@@ -416,10 +677,95 @@ namespace RorType.Gameplay.AI
             return halfHeight - centerOffset;
         }
 
+        private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)
+        {
+            var effectiveLifetime = Mathf.Max(0.01f, configuredLifetime);
+            if (speed <= 0f || maxDistance <= 0f)
+            {
+                return effectiveLifetime;
+            }
+
+            return Mathf.Min(effectiveLifetime, maxDistance / speed);
+        }
+
+        private bool TrySampleNavMeshPosition(Vector3 sourcePosition, float sampleDistance, out Vector3 sampledPosition)
+        {
+            if (NavMesh.SamplePosition(sourcePosition, out var navMeshHit, Mathf.Max(0.1f, sampleDistance), NavMesh.AllAreas))
+            {
+                sampledPosition = navMeshHit.position;
+                return true;
+            }
+
+            sampledPosition = sourcePosition;
+            return false;
+        }
+
+        private void RotateVisual(Vector3 direction)
+        {
+            if (visualRoot == null)
+            {
+                return;
+            }
+
+            direction.y = 0f;
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            var targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
+            visualRoot.rotation = Quaternion.RotateTowards(
+                visualRoot.rotation,
+                targetRotation,
+                turnSpeedDegrees * Time.fixedDeltaTime);
+        }
+
+        private Vector3 GetPatrolFacingDirection()
+        {
+            if (navMeshAgent != null)
+            {
+                var velocity = navMeshAgent.velocity;
+                velocity.y = 0f;
+                if (velocity.sqrMagnitude > 0.0001f)
+                {
+                    return velocity.normalized;
+                }
+
+                var desiredVelocity = navMeshAgent.desiredVelocity;
+                desiredVelocity.y = 0f;
+                if (desiredVelocity.sqrMagnitude > 0.0001f)
+                {
+                    return desiredVelocity.normalized;
+                }
+            }
+
+            return visualRoot != null ? visualRoot.forward : transform.forward;
+        }
+
         private void ResolveTarget()
         {
             playerMotor = Object.FindFirstObjectByType<TopDownPlayerMotor>();
             target = playerMotor != null ? playerMotor.transform : null;
+        }
+
+        private float GetDetectionRadius()
+        {
+            return detectionRadius > 0f ? detectionRadius : DefaultDetectionRadius;
+        }
+
+        private float GetLoseTargetRadius()
+        {
+            return loseTargetRadius > 0f ? loseTargetRadius : DefaultLoseTargetRadius;
+        }
+
+        private float GetPatrolRadius()
+        {
+            return patrolRadius >= 0f ? patrolRadius : DefaultPatrolRadius;
+        }
+
+        private float GetShooterAttackRadius()
+        {
+            return shooterAttackRadius > 0f ? shooterAttackRadius : DefaultShooterAttackRadius;
         }
 
         private void PlayHitFlash()
@@ -453,6 +799,8 @@ namespace RorType.Gameplay.AI
             }
 
             isDead = true;
+            StopNavigation();
+
             if (hitFlashRoutine != null)
             {
                 StopCoroutine(hitFlashRoutine);
@@ -555,6 +903,36 @@ namespace RorType.Gameplay.AI
             }
         }
 
+        private void IgnoreEnemyCollisions(Collider projectileCollider)
+        {
+            if (projectileCollider == null)
+            {
+                return;
+            }
+
+            var enemies = Object.FindObjectsByType<EnemyCapsuleController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            for (var enemyIndex = 0; enemyIndex < enemies.Length; enemyIndex++)
+            {
+                var enemy = enemies[enemyIndex];
+                if (enemy == null)
+                {
+                    continue;
+                }
+
+                var enemyColliders = enemy.GetComponentsInChildren<Collider>();
+                for (var colliderIndex = 0; colliderIndex < enemyColliders.Length; colliderIndex++)
+                {
+                    var enemyCollider = enemyColliders[colliderIndex];
+                    if (enemyCollider == null || enemyCollider == projectileCollider)
+                    {
+                        continue;
+                    }
+
+                    Physics.IgnoreCollision(projectileCollider, enemyCollider, true);
+                }
+            }
+        }
+
         private void TriggerMeleePunch(int fistIndex)
         {
             EnsureMeleeFistsInitialized();
@@ -635,6 +1013,7 @@ namespace RorType.Gameplay.AI
             var fistCollider = fist.GetComponent<Collider>();
             if (fistCollider != null)
             {
+                fistCollider.enabled = false;
                 Destroy(fistCollider);
             }
 
@@ -716,6 +1095,18 @@ namespace RorType.Gameplay.AI
             var explosionCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
             var directionToPlayer = playerMotor.transform.position - explosionCenter;
             TryApplyPlayerKnockback(directionToPlayer, explodeKnockbackForce, explodeVisualRadius);
+        }
+
+        private void OnDrawGizmosSelected()
+        {
+            Gizmos.color = new Color(1f, 0.82f, 0.12f, 0.45f);
+            Gizmos.DrawWireSphere(transform.position, detectionRadius > 0f ? detectionRadius : DefaultDetectionRadius);
+
+            Gizmos.color = new Color(1f, 0.45f, 0.12f, 0.35f);
+            Gizmos.DrawWireSphere(transform.position, loseTargetRadius > 0f ? loseTargetRadius : DefaultLoseTargetRadius);
+
+            Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.25f);
+            Gizmos.DrawWireSphere(patrolAnchor == Vector3.zero ? transform.position : patrolAnchor, patrolRadius >= 0f ? patrolRadius : DefaultPatrolRadius);
         }
     }
 }
