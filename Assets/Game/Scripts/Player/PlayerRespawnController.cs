@@ -16,6 +16,7 @@ namespace RorType.Gameplay.Player
         private TopDownGroundProbe groundProbe;
         private TopDownInputAdapter inputAdapter;
         private TopDownPlayerMotor motor;
+        private TopDownFacingController facingController;
 
         private Vector3 safePosition;
         private Quaternion safeRotation;
@@ -26,6 +27,7 @@ namespace RorType.Gameplay.Player
             groundProbe = GetComponent<TopDownGroundProbe>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
             motor = GetComponent<TopDownPlayerMotor>();
+            facingController = GetComponent<TopDownFacingController>();
 
             safePosition = transform.position;
             safeRotation = transform.rotation;
@@ -62,6 +64,11 @@ namespace RorType.Gameplay.Player
             if (motor != null)
             {
                 motor.ResetMotionState();
+            }
+
+            if (facingController != null)
+            {
+                facingController.ResetFeedbackState();
             }
         }
 

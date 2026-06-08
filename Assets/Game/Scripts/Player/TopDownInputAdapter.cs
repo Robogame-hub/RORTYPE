@@ -14,12 +14,19 @@ namespace RorType.Gameplay.Player
         [SerializeField] private KeyCode moveRightKey = KeyCode.D;
         [SerializeField] private KeyCode moveForwardKey = KeyCode.W;
         [SerializeField] private KeyCode moveBackwardKey = KeyCode.S;
+        [SerializeField] private int fireMouseButton = 0;
+        [SerializeField] private int meleeMouseButton = 1;
 
         public Vector2 MoveInput { get; private set; }
         public bool SprintHeld { get; private set; }
         public bool RespawnPressed { get; private set; }
         public bool JumpPressed { get; private set; }
         public bool DashPressed { get; private set; }
+        public bool FireHeld { get; private set; }
+        public bool FirePressed { get; private set; }
+        public bool MeleeHeld { get; private set; }
+        public bool MeleePressed { get; private set; }
+        public Vector3 MouseScreenPosition { get; private set; }
         public bool HasMovementInput => MoveInput.sqrMagnitude > 0.0001f;
 
         private void Update()
@@ -38,6 +45,19 @@ namespace RorType.Gameplay.Player
             RespawnPressed = Input.GetKeyDown(respawnKey);
             JumpPressed = Input.GetKeyDown(jumpKey);
             DashPressed = Input.GetKeyDown(dashKey);
+            FireHeld = Input.GetMouseButton(fireMouseButton);
+            if (Input.GetMouseButtonDown(fireMouseButton))
+            {
+                FirePressed = true;
+            }
+
+            MeleeHeld = Input.GetMouseButton(meleeMouseButton);
+            if (Input.GetMouseButtonDown(meleeMouseButton))
+            {
+                MeleePressed = true;
+            }
+
+            MouseScreenPosition = Input.mousePosition;
         }
 
         public void ConsumeFrameActions()
@@ -53,6 +73,16 @@ namespace RorType.Gameplay.Player
         public void ConsumeDashPressed()
         {
             DashPressed = false;
+        }
+
+        public void ConsumeFirePressed()
+        {
+            FirePressed = false;
+        }
+
+        public void ConsumeMeleePressed()
+        {
+            MeleePressed = false;
         }
 
         private Vector2 ReadKeyboardMovement()
