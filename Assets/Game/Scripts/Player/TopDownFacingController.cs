@@ -1,3 +1,4 @@
+using RorType.Gameplay.Combat;
 using UnityEngine;
 
 namespace RorType.Gameplay.Player
@@ -27,6 +28,8 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float projectileStretchMultiplier = 1.65f;
         [SerializeField, Range(0.1f, 1f)] private float projectileSquashMultiplier = 0.74f;
         [SerializeField, Min(0.01f)] private float projectileScaleRecoverySharpness = 10f;
+        [SerializeField, Min(0f)] private float projectileDamage = 1f;
+        [SerializeField, Min(0f)] private float projectileImpactImpulse = 1f;
 
         [Header("Melee")]
         [SerializeField] private bool automaticMelee = true;
@@ -40,6 +43,9 @@ namespace RorType.Gameplay.Player
         [SerializeField] private Color meleeFistColor = new Color(0.86f, 0.14f, 0.14f);
         [SerializeField, Min(0f)] private float meleeFistScaleBoost = 0.12f;
         [SerializeField, Min(0f)] private float meleeFistForwardStretchBoost = 0.18f;
+        [SerializeField, Min(0f)] private float meleeDamage = 2f;
+        [SerializeField, Min(0f)] private float meleeImpactImpulse = 2f;
+        [SerializeField, Min(1)] private int meleeHitBufferSize = 12;
 
         [Header("Bounce")]
         [SerializeField, Min(0.01f)] private float bounceDuration = 0.22f;
@@ -64,6 +70,8 @@ namespace RorType.Gameplay.Player
         private bool hasFeedbackBasePose;
         private readonly Transform[] meleeFists = new Transform[MeleeFistCount];
         private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
+        private Collider[] meleeHitBuffer;
+        private Component[] meleeUniqueHitBuffer;
 
         private void Awake()
         {
@@ -73,6 +81,7 @@ namespace RorType.Gameplay.Player
             capsuleCollider = GetComponent<CapsuleCollider>();
             CacheFeedbackBasePose();
             EnsureMeleeFistsInitialized();
+            EnsureMeleeHitBuffers();
         }
 
         private void Update()
@@ -221,7 +230,11 @@ namespace RorType.Gameplay.Player
                 projectileLifetime,
                 projectileStretchMultiplier,
                 projectileSquashMultiplier,
-                projectileScaleRecoverySharpness);
+                projectileScaleRecoverySharpness,
+                projectileDamage,
+                projectileImpactImpulse,
+                gameObject,
+                CombatTeam.Player);
 
             TriggerBounce();
         }
@@ -235,6 +248,7 @@ namespace RorType.Gameplay.Player
             }
 
             meleeFistPunchTimers[fistIndex] = meleePunchDuration;
+            ApplyMeleeHit(fistIndex);
             TriggerBounce();
         }
 
@@ -308,10 +322,85 @@ namespace RorType.Gameplay.Player
             return fist.transform;
         }
 
+        private void ApplyMeleeHit(int fistIndex)
+        {
+            EnsureMeleeHitBuffers();
+            var attackPoint = GetMeleeAttackWorldPosition(fistIndex);
+            var hitCount = Physics.OverlapSphereNonAlloc(
+                attackPoint,
+                meleeFistRadius,
+                meleeHitBuffer,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+
+            var uniqueHitCount = 0;
+            for (var i = 0; i < hitCount; i++)
+            {
+                var hitCollider = meleeHitBuffer[i];
+                if (hitCollider == null || hitCollider.transform.root == transform.root)
+                {
+                    continue;
+                }
+
+                if (!CombatUtility.TryGetDamageable(hitCollider, out var damageable, out var damageableComponent))
+                {
+                    continue;
+                }
+
+                if (!damageable.IsAlive || damageable.Team == CombatTeam.Player)
+                {
+                    continue;
+                }
+
+                var alreadyHit = false;
+                for (var uniqueIndex = 0; uniqueIndex < uniqueHitCount; uniqueIndex++)
+                {
+                    if (meleeUniqueHitBuffer[uniqueIndex] == damageableComponent)
+                    {
+                        alreadyHit = true;
+                        break;
+                    }
+                }
+
+                if (alreadyHit)
+                {
+                    continue;
+                }
+
+                meleeUniqueHitBuffer[uniqueHitCount] = damageableComponent;
+                uniqueHitCount++;
+
+                damageable.ReceiveHit(new CombatHitInfo(
+                    meleeDamage,
+                    attackPoint,
+                    currentAimDirection,
+                    meleeImpactImpulse,
+                    gameObject,
+                    CombatTeam.Player));
+            }
+
+            for (var i = 0; i < hitCount; i++)
+            {
+                meleeHitBuffer[i] = null;
+            }
+
+            for (var i = 0; i < uniqueHitCount; i++)
+            {
+                meleeUniqueHitBuffer[i] = null;
+            }
+        }
+
         private Vector3 GetMeleeBaseLocalPosition(int fistIndex)
         {
             var side = fistIndex == 0 ? -meleeSideOffset : meleeSideOffset;
             return new Vector3(side, meleeHeightOffset, meleeForwardOffset);
+        }
+
+        private Vector3 GetMeleeAttackWorldPosition(int fistIndex)
+        {
+            var parent = ResolveCombatVisualParent();
+            var localPoint = GetMeleeBaseLocalPosition(fistIndex) + (Vector3.forward * meleeForwardReach);
+            return parent.TransformPoint(localPoint);
         }
 
         private float EvaluatePunchAmount(float progress)
@@ -428,6 +517,16 @@ namespace RorType.Gameplay.Player
 
             feedbackBaseLocalScale = targetTransform.localScale;
             hasFeedbackBasePose = true;
+        }
+
+        private void EnsureMeleeHitBuffers()
+        {
+            var bufferSize = Mathf.Max(1, meleeHitBufferSize);
+            if (meleeHitBuffer == null || meleeHitBuffer.Length != bufferSize)
+            {
+                meleeHitBuffer = new Collider[bufferSize];
+                meleeUniqueHitBuffer = new Component[bufferSize];
+            }
         }
 
         private Transform ResolveFeedbackTransform()

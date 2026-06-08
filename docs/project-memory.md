@@ -237,3 +237,32 @@
 
 - Общий план реализации проекта: `docs/implementation-roadmap.md`
 - Детальный план движения игрока: `docs/player-movement-roadmap.md`
+
+## Принятое рабочее решение: combat sandbox и враги MVP
+
+- В проекте добавлен отдельный слой боевой логики и AI, не основанный на скриптах игрока:
+  - `Assets/Game/Scripts/Combat/CombatHitInfo.cs`
+  - `Assets/Game/Scripts/Combat/CombatUtility.cs`
+  - `Assets/Game/Scripts/Combat/TransientScaleEffect.cs`
+  - `Assets/Game/Scripts/AI/EnemyCapsuleController.cs`
+  - `Assets/Game/Scripts/AI/EnemyProjectileSphere.cs`
+- Текущий прототип игрока больше не ограничен только визуалом атак:
+  - `TopDownProjectileSphere` теперь может наносить урон `IDamageable`-целям
+  - `TopDownFacingController` наносит melee-урон через overlap-hit, а не только через визуальные кулаки
+- Принятое ограничение текущего этапа:
+  - игрок по-прежнему не получает урон от противников
+  - атаки врагов сейчас нужны для читаемого поведения и фидбэка, а не для полноценного двустороннего damage-loop
+  - при этом атаки врагов теперь могут заметно, но не слишком сильно отталкивать игрока через отдельный канал knockback без снятия HP
+- В проекте созданы реальные prefab-ассеты трёх капсульных врагов для ручной расстановки:
+  - `Assets/Game/Prefabs/Enemies/EnemyShooter.prefab` — жёлтый стрелок, радиусная стрельба раз в 2 секунды, `HP = 5`
+  - `Assets/Game/Prefabs/Enemies/EnemyMelee.prefab` — оранжевый melee-враг, удар 2 раза в секунду вблизи, `HP = 10`
+  - `Assets/Game/Prefabs/Enemies/EnemyExploder.prefab` — фиолетовый взрывной враг, перед подрывом 3 раза мигает красным, `HP = 3`
+- Общий фидбэк текущего enemy MVP:
+  - при атаке враги делают `bounce` через squash/stretch
+  - при попадании игрока враги 3 раза мигают белым
+  - над врагами теперь показывается runtime-HP bar с текущим/максимальным HP; полоска увеличена вдвое и использует красный fill
+  - при попадании по врагам появляются вылетающие цифры полученного урона
+  - melee-враг теперь использует визуальные runtime-кулаки по образцу игрока, но на собственной AI-логике
+- Для prefab-пайплайна принят editor-builder:
+  - `Assets/Game/Editor/EnemyPrefabBuilder.cs`
+  - prefab- и material-ассеты собираются через Unity batchmode или меню `RORTYPE/Build Enemy Prefabs`

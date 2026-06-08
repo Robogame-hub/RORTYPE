@@ -1,23 +1,21 @@
 using RorType.Gameplay.Combat;
 using UnityEngine;
 
-namespace RorType.Gameplay.Player
+namespace RorType.Gameplay.AI
 {
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(SphereCollider))]
-    public sealed class TopDownProjectileSphere : MonoBehaviour
+    public sealed class EnemyProjectileSphere : MonoBehaviour
     {
         private Rigidbody body;
         private Vector3 baseScale;
         private float lifetime;
         private float scaleRecoverySharpness;
+        private float knockbackForce;
         private float age;
-        private float damage;
-        private float impactImpulse;
-        private GameObject instigator;
-        private CombatTeam sourceTeam;
         private bool isInitialized;
         private bool isConsumed;
+        private Transform instigatorRoot;
 
         private void Awake()
         {
@@ -49,10 +47,8 @@ namespace RorType.Gameplay.Player
             float stretchMultiplier,
             float squashMultiplier,
             float recoverySharpness,
-            float damageAmount,
-            float impulse,
-            GameObject sourceInstigator,
-            CombatTeam team)
+            float knockbackImpulse,
+            Transform instigator)
         {
             if (body == null)
             {
@@ -60,8 +56,8 @@ namespace RorType.Gameplay.Player
             }
 
             var flightDirection = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector3.forward;
-
             transform.rotation = Quaternion.LookRotation(flightDirection, Vector3.up);
+
             baseScale = transform.localScale;
             transform.localScale = new Vector3(
                 baseScale.x * squashMultiplier,
@@ -70,10 +66,8 @@ namespace RorType.Gameplay.Player
 
             lifetime = Mathf.Max(0.01f, lifetimeSeconds);
             scaleRecoverySharpness = Mathf.Max(0.01f, recoverySharpness);
-            damage = Mathf.Max(0f, damageAmount);
-            impactImpulse = Mathf.Max(0f, impulse);
-            instigator = sourceInstigator;
-            sourceTeam = team;
+            knockbackForce = Mathf.Max(0f, knockbackImpulse);
+            instigatorRoot = instigator;
 
             body.useGravity = false;
             body.linearDamping = 0f;
@@ -86,59 +80,46 @@ namespace RorType.Gameplay.Player
 
             age = 0f;
             isInitialized = true;
+            isConsumed = false;
         }
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (TryApplyHit(collision.collider, collision.GetContact(0).point))
-            {
-                Destroy(gameObject);
-                return;
-            }
-
-            Destroy(gameObject);
+            ConsumeImpact(collision.collider);
         }
 
         private void OnTriggerEnter(Collider other)
         {
-            if (TryApplyHit(other, other.ClosestPoint(transform.position)))
+            ConsumeImpact(other);
+        }
+
+        private void ConsumeImpact(Collider other)
+        {
+            if (isConsumed)
             {
-                Destroy(gameObject);
                 return;
             }
 
-            Destroy(gameObject);
-        }
-
-        private bool TryApplyHit(Collider other, Vector3 hitPoint)
-        {
-            if (isConsumed || other == null)
+            if (other != null && instigatorRoot != null && other.transform.root == instigatorRoot)
             {
-                return false;
-            }
-
-            if (!CombatUtility.TryGetDamageable(other, out var damageable, out var damageableComponent))
-            {
-                return false;
-            }
-
-            if (!damageable.IsAlive || damageable.Team == sourceTeam || CombatUtility.SharesRoot(instigator, damageableComponent))
-            {
-                return false;
+                return;
             }
 
             isConsumed = true;
-            var hitDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
-                ? body.linearVelocity.normalized
-                : transform.forward;
 
-            return damageable.ReceiveHit(new CombatHitInfo(
-                damage,
-                hitPoint,
-                hitDirection,
-                impactImpulse,
-                instigator,
-                sourceTeam));
+            if (other != null)
+            {
+                var knockbackReceiver = other.GetComponentInParent<IKnockbackReceiver>();
+                if (knockbackReceiver != null)
+                {
+                    var impactDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
+                        ? body.linearVelocity.normalized
+                        : transform.forward;
+                    knockbackReceiver.ApplyKnockback(impactDirection, knockbackForce);
+                }
+            }
+
+            Destroy(gameObject);
         }
     }
 }

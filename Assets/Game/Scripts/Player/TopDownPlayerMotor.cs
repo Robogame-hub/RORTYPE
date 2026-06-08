@@ -1,3 +1,4 @@
+using RorType.Gameplay.Combat;
 using UnityEngine;
 
 namespace RorType.Gameplay.Player
@@ -6,7 +7,7 @@ namespace RorType.Gameplay.Player
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(TopDownInputAdapter))]
     [RequireComponent(typeof(TopDownGroundProbe))]
-    public sealed class TopDownPlayerMotor : MonoBehaviour
+    public sealed class TopDownPlayerMotor : MonoBehaviour, IKnockbackReceiver
     {
         [Header("References")]
         [SerializeField] private Transform movementReference;
@@ -34,11 +35,16 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float dashCooldown = 0.65f;
         [SerializeField] private bool allowAirDash = true;
 
+        [Header("Impact")]
+        [SerializeField, Min(0f)] private float knockbackDamping = 18f;
+        [SerializeField, Min(0f)] private float maxExternalPlanarSpeed = 10f;
+
         private Rigidbody body;
         private CapsuleCollider capsuleCollider;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
         private Vector3 planarVelocity;
+        private Vector3 externalPlanarVelocity;
         private Vector3 dashDirection = Vector3.forward;
         private float verticalVelocity;
         private float jumpBufferTimer;
@@ -129,6 +135,18 @@ namespace RorType.Gameplay.Player
                     moveRate * controlFactor * Time.fixedDeltaTime);
             }
 
+            externalPlanarVelocity = Vector3.MoveTowards(
+                externalPlanarVelocity,
+                Vector3.zero,
+                knockbackDamping * Time.fixedDeltaTime);
+
+            if (externalPlanarVelocity.sqrMagnitude > maxExternalPlanarSpeed * maxExternalPlanarSpeed)
+            {
+                externalPlanarVelocity = externalPlanarVelocity.normalized * maxExternalPlanarSpeed;
+            }
+
+            var combinedPlanarVelocity = planarVelocity + externalPlanarVelocity;
+
             if (targetPlanarVelocity.sqrMagnitude > 0.0001f)
             {
                 body.WakeUp();
@@ -137,7 +155,7 @@ namespace RorType.Gameplay.Player
             var useGroundSnap = isGroundedForLocomotion && verticalVelocity <= 0f;
             if (useGroundSnap)
             {
-                var targetPosition = body.position + (planarVelocity * Time.fixedDeltaTime);
+                var targetPosition = body.position + (combinedPlanarVelocity * Time.fixedDeltaTime);
                 targetPosition.y = ResolveGroundedBodyPositionY();
                 body.linearVelocity = Vector3.zero;
                 body.MovePosition(targetPosition);
@@ -145,10 +163,10 @@ namespace RorType.Gameplay.Player
             else
             {
                 verticalVelocity += -extraFallGravity * Time.fixedDeltaTime;
-                body.linearVelocity = new Vector3(planarVelocity.x, verticalVelocity, planarVelocity.z);
+                body.linearVelocity = new Vector3(combinedPlanarVelocity.x, verticalVelocity, combinedPlanarVelocity.z);
             }
 
-            CurrentSpeed = planarVelocity.magnitude;
+            CurrentSpeed = combinedPlanarVelocity.magnitude;
         }
 
         public void SetMovementReference(Transform reference)
@@ -167,11 +185,29 @@ namespace RorType.Gameplay.Player
             dashCooldownTimer = 0f;
             dashQueued = false;
             airDashConsumed = false;
+            externalPlanarVelocity = Vector3.zero;
             hasVisualPosition = false;
             if (visualRoot != null)
             {
                 visualRoot.localPosition = Vector3.zero;
             }
+        }
+
+        public void ApplyKnockback(Vector3 direction, float force)
+        {
+            var planarDirection = Vector3.ProjectOnPlane(direction, Vector3.up);
+            if (planarDirection.sqrMagnitude <= 0.0001f || force <= 0f)
+            {
+                return;
+            }
+
+            externalPlanarVelocity += planarDirection.normalized * force;
+            if (externalPlanarVelocity.sqrMagnitude > maxExternalPlanarSpeed * maxExternalPlanarSpeed)
+            {
+                externalPlanarVelocity = externalPlanarVelocity.normalized * maxExternalPlanarSpeed;
+            }
+
+            body.WakeUp();
         }
 
         private Vector3 ResolveWorldMoveDirection(Vector2 moveInput)
