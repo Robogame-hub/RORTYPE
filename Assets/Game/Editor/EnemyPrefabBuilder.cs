@@ -203,8 +203,10 @@ namespace RorType.Gameplay.Editor
             serializedObject.FindProperty("shooterAttackRadius").floatValue = shooterAttackRadius;
             serializedObject.FindProperty("shooterPreferredDistance").floatValue = shooterPreferredDistance;
             serializedObject.FindProperty("shooterInterval").floatValue = shooterInterval;
-            serializedObject.FindProperty("shooterRadialInterval").floatValue = 3f;
-            serializedObject.FindProperty("shooterRadialProjectileCount").intValue = 12;
+            serializedObject.FindProperty("shooterRadialMinInterval").floatValue = 3f;
+            serializedObject.FindProperty("shooterRadialMaxInterval").floatValue = 6f;
+            serializedObject.FindProperty("shooterRadialMinProjectileCount").intValue = 5;
+            serializedObject.FindProperty("shooterRadialMaxProjectileCount").intValue = 7;
             serializedObject.FindProperty("shooterProjectileMaxDistance").floatValue = 20f;
             serializedObject.FindProperty("meleeAttackRange").floatValue = meleeAttackRange;
             serializedObject.FindProperty("meleeInterval").floatValue = meleeInterval;

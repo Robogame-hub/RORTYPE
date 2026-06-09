@@ -11,6 +11,7 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0f)] private float heightOffset = 1.7f;
         [SerializeField, Min(0.01f)] private float healthBarWidth = 0.9f;
         [SerializeField, Min(0.01f)] private float healthBarHeight = 0.16f;
+        [SerializeField, Min(0f)] private float healthFillOverlap = 0.01f;
         [SerializeField, Min(0.01f)] private float healthTextScale = 0.075f;
         [SerializeField, Min(0.01f)] private float damageTextScale = 0.09f;
 
@@ -40,8 +41,13 @@ namespace RorType.Gameplay.AI
 
             if (healthFillTransform != null)
             {
-                healthFillTransform.localScale = new Vector3(healthBarWidth * ratio, healthBarHeight, healthBarHeight);
-                healthFillTransform.localPosition = new Vector3((-healthBarWidth * 0.5f) + (healthFillTransform.localScale.x * 0.5f), 0f, 0f);
+                var fillWidth = Mathf.Max(0.001f, (healthBarWidth * ratio) + (healthFillOverlap * 2f));
+                var fillHeight = healthBarHeight + (healthFillOverlap * 2f);
+                healthFillTransform.localScale = new Vector3(fillWidth, fillHeight, fillHeight);
+                healthFillTransform.localPosition = new Vector3(
+                    (-healthBarWidth * 0.5f) + (fillWidth * 0.5f) - healthFillOverlap,
+                    0f,
+                    0f);
             }
 
             if (healthTextMesh != null)
@@ -101,7 +107,10 @@ namespace RorType.Gameplay.AI
             fill.name = "HealthBarFill";
             fill.transform.SetParent(billboardRoot, false);
             fill.transform.localPosition = Vector3.zero;
-            fill.transform.localScale = new Vector3(healthBarWidth, healthBarHeight, healthBarHeight);
+            fill.transform.localScale = new Vector3(
+                healthBarWidth + (healthFillOverlap * 2f),
+                healthBarHeight + (healthFillOverlap * 2f),
+                healthBarHeight + (healthFillOverlap * 2f));
             RemoveCollider(fill);
             healthFillTransform = fill.transform;
             var fillRenderer = fill.GetComponent<MeshRenderer>();

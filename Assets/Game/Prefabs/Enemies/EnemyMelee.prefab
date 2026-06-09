@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 2193844642569082842}
   - component: {fileID: 7598556684385139731}
   - component: {fileID: 8190394492271339124}
+  - component: {fileID: 901001001001001007}
   m_Layer: 0
   m_Name: EnemyMelee
   m_TagString: Untagged
@@ -136,8 +137,10 @@ MonoBehaviour:
   shooterAttackRadius: 20
   shooterPreferredDistance: 6
   shooterInterval: 0.85
-  shooterRadialInterval: 3
-  shooterRadialProjectileCount: 12
+  shooterRadialMinInterval: 3
+  shooterRadialMaxInterval: 6
+  shooterRadialMinProjectileCount: 5
+  shooterRadialMaxProjectileCount: 7
   shooterProjectileSpeed: 18
   shooterProjectileLifetime: 1.8
   shooterProjectileMaxDistance: 20
@@ -162,8 +165,12 @@ MonoBehaviour:
   explodeWarningFlashInterval: 0.11
   explodeVisualLifetime: 0.16
   explodeVisualRadius: 2.6
+  explodeEffectRadius: 3
+  explodeDamageRadius: 2
+  explodeDamage: 3
   explodeKnockbackForce: 4.8
   explodeWarningColor: {r: 1, g: 0.16, b: 0.16, a: 1}
+  visualPositionSharpness: 30
   bounceDuration: 0.22
   bounceSideScale: 0.12
   bounceHeightScale: 0.18
@@ -171,6 +178,25 @@ MonoBehaviour:
   hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
   hitFlashCount: 3
   hitFlashInterval: 0.05
+--- !u!114 &901001001001001007
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3615722631763545253}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
+  trackedTransform: {fileID: 8120257798234494895}
+  iconGroup: 1
+  presentation: 0
+  iconSprite: {fileID: 327268124, guid: 6bd6cf3db7f49914aa9e279abbe4de21, type: 3}
+  iconColor: {r: 1, g: 0, b: 0, a: 1}
+  rotateWithWorldYaw: 0
+  worldOffset: {x: 0, y: 0, z: 0}
 --- !u!1 &7208630907709927234
 GameObject:
   m_ObjectHideFlags: 0

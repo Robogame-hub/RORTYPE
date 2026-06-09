@@ -1582,6 +1582,9 @@ MonoBehaviour:
   followOffset: {x: -10, y: 16, z: -10}
   lookOffset: {x: 0, y: 1, z: 0}
   followSharpness: 8
+  cursorLookAheadDistance: 9
+  cursorLookAheadSharpness: 9
+  cursorLookAheadLag: 0.28
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

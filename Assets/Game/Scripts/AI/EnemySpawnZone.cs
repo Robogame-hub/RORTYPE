@@ -10,10 +10,14 @@ namespace RorType.Gameplay.AI
     public sealed class EnemySpawnZone : MonoBehaviour
     {
         private const float DefaultSpawnInterval = 10f;
-        private const int DefaultMaxActiveEnemies = 40;
+        private const int DefaultMaxActiveEnemies = 25;
+        private const int DefaultMaxTotalSpawnCount = 50;
+        private const int DefaultInitialSpawnCountPerPoint = 3;
 
         [Header("Activation")]
         [SerializeField, Min(1)] private int maxActiveEnemies = DefaultMaxActiveEnemies;
+        [SerializeField, Min(1)] private int maxTotalSpawnCount = DefaultMaxTotalSpawnCount;
+        [SerializeField, Min(1)] private int initialSpawnCountPerPoint = DefaultInitialSpawnCountPerPoint;
         [SerializeField, Min(0.1f)] private float minSpawnInterval = 3.5f;
         [SerializeField, Min(0.1f)] private float maxSpawnInterval = 6f;
         [SerializeField, Min(0.1f)] private float navMeshSampleDistance = 2f;
@@ -34,6 +38,8 @@ namespace RorType.Gameplay.AI
         private readonly HashSet<Transform> playersInside = new();
         private BoxCollider triggerZone;
         private float spawnTimer;
+        private int totalSpawnedEnemies;
+        private bool encounterActivated;
         private bool spawnTimerInitialized;
 
         private void Awake()
@@ -63,7 +69,10 @@ namespace RorType.Gameplay.AI
         {
             CleanupDestroyedEnemies();
 
-            if (!IsPlayerInside() || activeEnemies.Count >= GetActiveEnemyLimit())
+            if (!encounterActivated
+                || !IsPlayerInside()
+                || activeEnemies.Count >= GetActiveEnemyLimit()
+                || GetRemainingSpawnBudget() <= 0)
             {
                 spawnTimerInitialized = false;
                 return;
@@ -116,6 +125,7 @@ namespace RorType.Gameplay.AI
             }
 
             playersInside.Add(player.transform.root);
+            TryActivateEncounter();
         }
 
         private void OnTriggerExit(Collider other)
@@ -142,9 +152,10 @@ namespace RorType.Gameplay.AI
 
             var startIndex = Random.Range(0, spawnPoints.Count);
             var availableCapacity = Mathf.Max(0, GetActiveEnemyLimit() - activeEnemies.Count);
+            var remainingBudget = GetRemainingSpawnBudget();
             for (var offset = 0; offset < spawnPoints.Count; offset++)
             {
-                if (availableCapacity <= 0)
+                if (availableCapacity <= 0 || remainingBudget <= 0)
                 {
                     break;
                 }
@@ -156,30 +167,15 @@ namespace RorType.Gameplay.AI
                 }
 
                 var spawnedAnyAtPoint = false;
-                var targetBurstCount = Mathf.Min(spawnPoint.SpawnBurstCount, availableCapacity);
+                var targetBurstCount = Mathf.Min(spawnPoint.SpawnBurstCount, availableCapacity, remainingBudget);
                 var maxAttempts = Mathf.Max(targetBurstCount * 3, 1);
                 for (var attempt = 0; attempt < maxAttempts && targetBurstCount > 0 && activeEnemies.Count < GetActiveEnemyLimit(); attempt++)
                 {
-                    var prefab = ChooseEnemyPrefab();
-                    if (prefab == null)
-                    {
-                        break;
-                    }
-
-                    if (!TryResolveSpawnPosition(spawnPoint, out var spawnPosition))
+                    if (!TrySpawnEnemyAtPoint(spawnPoint, ref availableCapacity, ref remainingBudget))
                     {
                         continue;
                     }
 
-                    if (IsSpawnPointBlocked(spawnPosition))
-                    {
-                        continue;
-                    }
-
-                    var enemy = Instantiate(prefab, spawnPosition, spawnPoint.Rotation, transform);
-                    enemy.SetPatrolAnchor(spawnPosition);
-                    activeEnemies.Add(enemy);
-                    availableCapacity--;
                     targetBurstCount--;
                     spawnedAnyAtPoint = true;
                 }
@@ -190,6 +186,174 @@ namespace RorType.Gameplay.AI
                 }
             }
 
+            return false;
+        }
+
+        private void TryActivateEncounter()
+        {
+            if (encounterActivated)
+            {
+                return;
+            }
+
+            encounterActivated = true;
+            SpawnInitialWave();
+        }
+
+        private void SpawnInitialWave()
+        {
+            if (spawnPoints.Count == 0)
+            {
+                RefreshSpawnPoints();
+            }
+
+            if (spawnPoints.Count == 0)
+            {
+                return;
+            }
+
+            var availableCapacity = Mathf.Max(0, GetActiveEnemyLimit() - activeEnemies.Count);
+            var remainingBudget = GetRemainingSpawnBudget();
+            if (availableCapacity <= 0 || remainingBudget <= 0)
+            {
+                return;
+            }
+
+            var enemiesPerPoint = Mathf.Max(1, initialSpawnCountPerPoint);
+            for (var pointIndex = 0; pointIndex < spawnPoints.Count; pointIndex++)
+            {
+                var spawnPoint = spawnPoints[pointIndex];
+                if (spawnPoint == null)
+                {
+                    continue;
+                }
+
+                var spawnedAtPoint = 0;
+                var maxAttempts = Mathf.Max(enemiesPerPoint * 4, 1);
+                for (var attempt = 0;
+                     attempt < maxAttempts
+                     && spawnedAtPoint < enemiesPerPoint
+                     && availableCapacity > 0
+                     && remainingBudget > 0;
+                     attempt++)
+                {
+                    if (!TrySpawnInitialEnemyAtPoint(
+                            spawnPoint,
+                            spawnedAtPoint,
+                            enemiesPerPoint,
+                            ref availableCapacity,
+                            ref remainingBudget))
+                    {
+                        continue;
+                    }
+
+                    spawnedAtPoint++;
+                }
+
+                if (availableCapacity <= 0 || remainingBudget <= 0)
+                {
+                    break;
+                }
+            }
+
+            spawnTimerInitialized = false;
+        }
+
+        private bool TrySpawnInitialEnemyAtPoint(
+            EnemySpawnPoint spawnPoint,
+            int spawnIndex,
+            int totalSpawnCount,
+            ref int availableCapacity,
+            ref int remainingBudget)
+        {
+            if (spawnPoint == null || availableCapacity <= 0 || remainingBudget <= 0)
+            {
+                return false;
+            }
+
+            if (TryResolvePatternSpawnPosition(spawnPoint, spawnIndex, totalSpawnCount, out var patternedSpawnPosition)
+                && !IsSpawnPointBlocked(patternedSpawnPosition))
+            {
+                return SpawnEnemyAtResolvedPosition(
+                    spawnPoint,
+                    patternedSpawnPosition,
+                    ref availableCapacity,
+                    ref remainingBudget);
+            }
+
+            return TrySpawnEnemyAtPoint(spawnPoint, ref availableCapacity, ref remainingBudget);
+        }
+
+        private bool TrySpawnEnemyAtPoint(
+            EnemySpawnPoint spawnPoint,
+            ref int availableCapacity,
+            ref int remainingBudget)
+        {
+            if (spawnPoint == null || availableCapacity <= 0 || remainingBudget <= 0)
+            {
+                return false;
+            }
+
+            if (!TryResolveSpawnPosition(spawnPoint, out var spawnPosition))
+            {
+                return false;
+            }
+
+            if (IsSpawnPointBlocked(spawnPosition))
+            {
+                return false;
+            }
+
+            return SpawnEnemyAtResolvedPosition(spawnPoint, spawnPosition, ref availableCapacity, ref remainingBudget);
+        }
+
+        private bool SpawnEnemyAtResolvedPosition(
+            EnemySpawnPoint spawnPoint,
+            Vector3 spawnPosition,
+            ref int availableCapacity,
+            ref int remainingBudget)
+        {
+            var prefab = ChooseEnemyPrefab();
+            if (prefab == null)
+            {
+                return false;
+            }
+
+            var enemy = Instantiate(prefab, spawnPosition, spawnPoint.Rotation, transform);
+            enemy.SetPatrolAnchor(spawnPosition);
+            activeEnemies.Add(enemy);
+            totalSpawnedEnemies++;
+            availableCapacity--;
+            remainingBudget--;
+            return true;
+        }
+
+        private bool TryResolvePatternSpawnPosition(
+            EnemySpawnPoint spawnPoint,
+            int spawnIndex,
+            int totalSpawnCount,
+            out Vector3 spawnPosition)
+        {
+            var count = Mathf.Max(1, totalSpawnCount);
+            var radius = Mathf.Max(
+                spawnPointBlockedRadius * 1.15f,
+                Mathf.Min(spawnPoint.SpawnRadius, spawnPointBlockedRadius * 2.5f));
+            var angleStep = 360f / count;
+            var angle = angleStep * spawnIndex;
+            var offsetDirection = Quaternion.Euler(0f, angle, 0f) * spawnPoint.Rotation * Vector3.forward;
+            var candidatePosition = spawnPoint.Position + (offsetDirection.normalized * radius);
+
+            if (NavMesh.SamplePosition(
+                    candidatePosition,
+                    out var navMeshHit,
+                    Mathf.Max(0.1f, navMeshSampleDistance + radius),
+                    NavMesh.AllAreas))
+            {
+                spawnPosition = navMeshHit.position;
+                return true;
+            }
+
+            spawnPosition = spawnPoint.Position;
             return false;
         }
 
@@ -298,6 +462,11 @@ namespace RorType.Gameplay.AI
         private int GetActiveEnemyLimit()
         {
             return Mathf.Max(1, maxActiveEnemies);
+        }
+
+        private int GetRemainingSpawnBudget()
+        {
+            return Mathf.Max(0, Mathf.Max(1, maxTotalSpawnCount) - totalSpawnedEnemies);
         }
     }
 }

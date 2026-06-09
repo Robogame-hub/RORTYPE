@@ -49,7 +49,9 @@ namespace RorType.Gameplay.Editor
         private static void ApplySpawnZoneConfiguration(EnemySpawnZone spawnZone)
         {
             var serializedObject = new SerializedObject(spawnZone);
-            serializedObject.FindProperty("maxActiveEnemies").intValue = 40;
+            serializedObject.FindProperty("maxActiveEnemies").intValue = 25;
+            serializedObject.FindProperty("maxTotalSpawnCount").intValue = 50;
+            serializedObject.FindProperty("initialSpawnCountPerPoint").intValue = 3;
             serializedObject.FindProperty("minSpawnInterval").floatValue = 3.5f;
             serializedObject.FindProperty("maxSpawnInterval").floatValue = 6f;
             serializedObject.FindProperty("navMeshSampleDistance").floatValue = 2f;

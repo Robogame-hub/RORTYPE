@@ -2486,6 +2486,7 @@ GameObject:
   m_Component:
   - component: {fileID: 4713616007091389959}
   - component: {fileID: 8971019054337651152}
+  - component: {fileID: 901001001001001004}
   m_Layer: 0
   m_Name: Portal
   m_TagString: Untagged
@@ -2529,6 +2530,25 @@ NavMeshObstacle:
   m_CarveOnlyStationary: 1
   m_Center: {x: 0, y: 0, z: 0}
   m_TimeToStationary: 0.5
+--- !u!114 &901001001001001004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5838470384883035776}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
+  trackedTransform: {fileID: 4713616007091389959}
+  iconGroup: 2
+  presentation: 0
+  iconSprite: {fileID: -1647700, guid: 6bd6cf3db7f49914aa9e279abbe4de21, type: 3}
+  iconColor: {r: 0, g: 0.43627453, b: 1, a: 1}
+  rotateWithWorldYaw: 0
+  worldOffset: {x: 0, y: 0, z: 0}
 --- !u!1 &6103353465202026108
 GameObject:
   m_ObjectHideFlags: 0

@@ -55,7 +55,9 @@ namespace RorType.Gameplay.Player
         private bool dashQueued;
         private bool airDashConsumed;
         private bool isGroundedForLocomotion;
+        private bool hasVisualBasePose;
         private bool hasVisualPosition;
+        private Vector3 visualBaseLocalPosition;
 
         public Vector3 LastWorldMoveDirection { get; private set; } = Vector3.forward;
         public float CurrentSpeed { get; private set; }
@@ -70,6 +72,7 @@ namespace RorType.Gameplay.Player
             inputAdapter = GetComponent<TopDownInputAdapter>();
             groundProbe = GetComponent<TopDownGroundProbe>();
             visualRoot = ResolveVisualRoot();
+            CacheVisualBasePose();
 
             body.useGravity = false;
             body.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
@@ -190,7 +193,7 @@ namespace RorType.Gameplay.Player
             hasVisualPosition = false;
             if (visualRoot != null)
             {
-                visualRoot.localPosition = Vector3.zero;
+                visualRoot.position = transform.TransformPoint(visualBaseLocalPosition);
             }
         }
 
@@ -274,27 +277,22 @@ namespace RorType.Gameplay.Player
 
         private void UpdateVisualSmoothing()
         {
-            if (visualRoot == null)
+            if (visualRoot == null || visualRoot == transform)
             {
                 return;
             }
 
-            if (visualRoot.parent == transform)
-            {
-                visualRoot.localPosition = Vector3.zero;
-                hasVisualPosition = false;
-                return;
-            }
+            var targetPosition = transform.TransformPoint(visualBaseLocalPosition);
 
             if (!hasVisualPosition)
             {
-                visualRoot.position = transform.position;
+                visualRoot.position = targetPosition;
                 hasVisualPosition = true;
                 return;
             }
 
             var blend = 1f - Mathf.Exp(-visualPositionSharpness * Time.deltaTime);
-            visualRoot.position = Vector3.Lerp(visualRoot.position, transform.position, blend);
+            visualRoot.position = Vector3.Lerp(visualRoot.position, targetPosition, blend);
         }
 
         private void RefreshGroundedState()
@@ -432,6 +430,24 @@ namespace RorType.Gameplay.Player
             }
 
             return visualRoot;
+        }
+
+        private void CacheVisualBasePose()
+        {
+            if (hasVisualBasePose)
+            {
+                return;
+            }
+
+            if (visualRoot == null || visualRoot == transform)
+            {
+                visualBaseLocalPosition = Vector3.zero;
+                hasVisualBasePose = true;
+                return;
+            }
+
+            visualBaseLocalPosition = transform.InverseTransformPoint(visualRoot.position);
+            hasVisualBasePose = true;
         }
     }
 }

@@ -18,6 +18,10 @@ namespace RorType.Gameplay.AI
         private const float DefaultShooterAttackRadius = 20f;
         private const float DefaultProjectileMaxDistance = 20f;
         private const float DestinationUpdateThreshold = 0.2f;
+        private const float DefaultExplosionEffectRadius = 3f;
+        private const float DefaultExplosionDamageRadius = 2f;
+        private const float DefaultExplosionDamage = 3f;
+        private const int ExplosionHitBufferSize = 16;
 
         [Header("Identity")]
         [SerializeField] private EnemyCapsuleArchetype archetype = EnemyCapsuleArchetype.Shooter;
@@ -44,8 +48,10 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0.1f)] private float shooterAttackRadius = DefaultShooterAttackRadius;
         [SerializeField, Min(0.1f)] private float shooterPreferredDistance = 6f;
         [SerializeField, Min(0.01f)] private float shooterInterval = 0.85f;
-        [SerializeField, Min(0.01f)] private float shooterRadialInterval = 3f;
-        [SerializeField, Min(3)] private int shooterRadialProjectileCount = 12;
+        [SerializeField, Min(0.01f)] private float shooterRadialMinInterval = 3f;
+        [SerializeField, Min(0.01f)] private float shooterRadialMaxInterval = 6f;
+        [SerializeField, Min(3)] private int shooterRadialMinProjectileCount = 5;
+        [SerializeField, Min(3)] private int shooterRadialMaxProjectileCount = 7;
         [SerializeField, Min(0.1f)] private float shooterProjectileSpeed = 18f;
         [SerializeField, Min(0.01f)] private float shooterProjectileLifetime = 1.8f;
         [SerializeField, Min(0.1f)] private float shooterProjectileMaxDistance = DefaultProjectileMaxDistance;
@@ -73,11 +79,15 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(1)] private int explodeWarningFlashCount = 3;
         [SerializeField, Min(0.01f)] private float explodeWarningFlashInterval = 0.11f;
         [SerializeField, Min(0.01f)] private float explodeVisualLifetime = 0.16f;
-        [SerializeField, Min(0.1f)] private float explodeVisualRadius = 2.6f;
+        [SerializeField, Min(0.1f)] private float explodeVisualRadius = 5.2f;
+        [SerializeField, Min(0.1f)] private float explodeEffectRadius = DefaultExplosionEffectRadius;
+        [SerializeField, Min(0.1f)] private float explodeDamageRadius = DefaultExplosionDamageRadius;
+        [SerializeField, Min(0f)] private float explodeDamage = DefaultExplosionDamage;
         [SerializeField, Min(0f)] private float explodeKnockbackForce = 4.8f;
         [SerializeField] private Color explodeWarningColor = new Color(1f, 0.16f, 0.16f);
 
         [Header("Feedback")]
+        [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
         [SerializeField, Min(0.01f)] private float bounceDuration = 0.22f;
         [SerializeField, Min(0f)] private float bounceSideScale = 0.12f;
         [SerializeField, Min(0f)] private float bounceHeightScale = 0.18f;
@@ -97,6 +107,8 @@ namespace RorType.Gameplay.AI
         private readonly Vector3[] patrolPoints = new Vector3[2];
         private readonly Transform[] meleeFists = new Transform[MeleeFistCount];
         private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
+        private readonly Collider[] explosionHitBuffer = new Collider[ExplosionHitBufferSize];
+        private readonly Component[] explosionUniqueHitBuffer = new Component[ExplosionHitBufferSize];
         private Vector3 lastRequestedDestination;
         private float lastRequestedStoppingDistance = -1f;
         private float currentHealth;
@@ -105,6 +117,9 @@ namespace RorType.Gameplay.AI
         private float bounceTimer;
         private float patrolPauseTimer;
         private bool isDead;
+        private bool hasScheduledShooterRadialVolley;
+        private bool hasVisualBasePose;
+        private bool hasVisualPosition;
         private bool isWarningExplosion;
         private bool hasDetectedTarget;
         private bool hasPatrolRoute;
@@ -112,6 +127,7 @@ namespace RorType.Gameplay.AI
         private int nextMeleeFistIndex;
         private Coroutine hitFlashRoutine;
         private Coroutine explosionRoutine;
+        private Vector3 visualBaseLocalPosition;
 
         public CombatTeam Team => CombatTeam.Enemy;
         public bool IsAlive => !isDead;
@@ -153,6 +169,7 @@ namespace RorType.Gameplay.AI
             {
                 feedbackBaseLocalScale = visualRoot.localScale;
             }
+            CacheVisualBasePose();
 
             ConfigureNavMeshAgent();
             InitializeMaterialInstance();
@@ -204,6 +221,11 @@ namespace RorType.Gameplay.AI
             UpdateMeleeFistVisuals();
         }
 
+        private void LateUpdate()
+        {
+            UpdateVisualSmoothing();
+        }
+
         private void FixedUpdate()
         {
             if (isDead)
@@ -221,6 +243,7 @@ namespace RorType.Gameplay.AI
             if (target == null)
             {
                 hasDetectedTarget = false;
+                hasScheduledShooterRadialVolley = false;
                 TickPatrol();
                 RotateVisual(GetPatrolFacingDirection());
                 return;
@@ -267,7 +290,7 @@ namespace RorType.Gameplay.AI
 
         public bool ReceiveHit(in CombatHitInfo hitInfo)
         {
-            if (isDead || hitInfo.Team == Team)
+            if (isDead || isWarningExplosion || hitInfo.Team == Team)
             {
                 return false;
             }
@@ -275,7 +298,13 @@ namespace RorType.Gameplay.AI
             currentHealth = Mathf.Max(0f, currentHealth - hitInfo.Damage);
             overheadPresentation?.SetHealth(currentHealth, maxHealth);
             overheadPresentation?.SpawnDamageNumber(hitInfo.Damage, hitInfo.Point);
-            PlayHitFlash();
+            var reachedZeroHealth = currentHealth <= 0f;
+            var shouldExplodeOnDeath = reachedZeroHealth && archetype == EnemyCapsuleArchetype.Exploder;
+            var hitByExploder = IsExploderInstigator(hitInfo.Instigator);
+            if (!shouldExplodeOnDeath || hitByExploder)
+            {
+                PlayHitFlash();
+            }
 
             var hitSource = hitInfo.Instigator != null ? hitInfo.Instigator.transform : null;
             if (hitSource != null)
@@ -285,9 +314,16 @@ namespace RorType.Gameplay.AI
                 hasDetectedTarget = true;
             }
 
-            if (currentHealth <= 0f)
+            if (reachedZeroHealth)
             {
-                Die();
+                if (shouldExplodeOnDeath)
+                {
+                    BeginExplosionSequence(hitByExploder);
+                }
+                else
+                {
+                    Die();
+                }
             }
 
             return true;
@@ -295,6 +331,12 @@ namespace RorType.Gameplay.AI
 
         private void TickShooter(float distanceToTarget, Vector3 directionToTarget)
         {
+            if (!hasScheduledShooterRadialVolley)
+            {
+                shooterRadialCooldownTimer = GetRandomizedRadialInterval();
+                hasScheduledShooterRadialVolley = true;
+            }
+
             var preferredDistance = Mathf.Max(0.1f, shooterPreferredDistance);
             if (distanceToTarget > preferredDistance)
             {
@@ -315,7 +357,7 @@ namespace RorType.Gameplay.AI
 
             if (distanceToTarget <= GetShooterAttackRadius() && shooterRadialCooldownTimer <= 0f)
             {
-                shooterRadialCooldownTimer = shooterRadialInterval;
+                shooterRadialCooldownTimer = GetRandomizedRadialInterval();
                 FireRadialVolley(directionToTarget);
             }
 
@@ -359,10 +401,7 @@ namespace RorType.Gameplay.AI
             }
 
             StopNavigation();
-            if (explosionRoutine == null)
-            {
-                explosionRoutine = StartCoroutine(PlayExplosionWarningRoutine());
-            }
+            BeginExplosionSequence();
         }
 
         private void TickPatrol()
@@ -408,14 +447,15 @@ namespace RorType.Gameplay.AI
 
         private void FireRadialVolley(Vector3 directionToTarget)
         {
-            var projectileCount = Mathf.Max(3, shooterRadialProjectileCount);
+            var projectileCount = GetRandomizedRadialProjectileCount();
             var baseDirection = directionToTarget.sqrMagnitude > 0.0001f ? directionToTarget.normalized : transform.forward;
             var baseAngle = Mathf.Atan2(baseDirection.x, baseDirection.z) * Mathf.Rad2Deg;
+            var randomAngleOffset = Random.Range(0f, 360f);
             var stepAngle = 360f / projectileCount;
 
             for (var i = 0; i < projectileCount; i++)
             {
-                var shotAngle = baseAngle + (stepAngle * i);
+                var shotAngle = baseAngle + randomAngleOffset + (stepAngle * i);
                 var radialDirection = Quaternion.Euler(0f, shotAngle, 0f) * Vector3.forward;
                 SpawnProjectile(radialDirection, "RadialProjectile");
             }
@@ -463,10 +503,21 @@ namespace RorType.Gameplay.AI
                 transform.root);
         }
 
-        private IEnumerator PlayExplosionWarningRoutine()
+        private IEnumerator PlayExplosionWarningRoutine(bool preserveHitFlashFrame)
         {
             isWarningExplosion = true;
             attackCooldownTimer = 0f;
+
+            if (preserveHitFlashFrame && hitFlashRoutine != null)
+            {
+                yield return null;
+            }
+
+            if (hitFlashRoutine != null)
+            {
+                StopCoroutine(hitFlashRoutine);
+                hitFlashRoutine = null;
+            }
 
             for (var i = 0; i < explodeWarningFlashCount; i++)
             {
@@ -476,7 +527,9 @@ namespace RorType.Gameplay.AI
                 yield return new WaitForSeconds(explodeWarningFlashInterval);
             }
 
+            explosionRoutine = null;
             TriggerAttackBounce();
+            ApplyExplosionDamage();
             ApplyExplosionKnockback();
             SpawnExplosionVisual();
             Die();
@@ -505,7 +558,7 @@ namespace RorType.Gameplay.AI
             var effect = explosion.AddComponent<TransientScaleEffect>();
             effect.Initialize(
                 Vector3.one * 0.1f,
-                Vector3.one * explodeVisualRadius,
+                Vector3.one * GetExplosionEffectRadius(),
                 explodeVisualLifetime);
         }
 
@@ -558,6 +611,7 @@ namespace RorType.Gameplay.AI
             if (hasDetectedTarget && distanceToTarget > GetLoseTargetRadius())
             {
                 hasDetectedTarget = false;
+                hasScheduledShooterRadialVolley = false;
                 StopNavigation();
             }
         }
@@ -768,6 +822,20 @@ namespace RorType.Gameplay.AI
             return shooterAttackRadius > 0f ? shooterAttackRadius : DefaultShooterAttackRadius;
         }
 
+        private float GetRandomizedRadialInterval()
+        {
+            var minInterval = Mathf.Max(0.01f, shooterRadialMinInterval);
+            var maxInterval = Mathf.Max(minInterval, shooterRadialMaxInterval);
+            return Random.Range(minInterval, maxInterval);
+        }
+
+        private int GetRandomizedRadialProjectileCount()
+        {
+            var minProjectileCount = Mathf.Max(3, shooterRadialMinProjectileCount);
+            var maxProjectileCount = Mathf.Max(minProjectileCount, shooterRadialMaxProjectileCount);
+            return Random.Range(minProjectileCount, maxProjectileCount + 1);
+        }
+
         private void PlayHitFlash()
         {
             if (hitFlashRoutine != null)
@@ -813,6 +881,7 @@ namespace RorType.Gameplay.AI
                 explosionRoutine = null;
             }
 
+            isWarningExplosion = false;
             Destroy(gameObject);
         }
 
@@ -837,6 +906,25 @@ namespace RorType.Gameplay.AI
 
             var scaleBlend = 1f - Mathf.Exp(-bounceScaleSharpness * deltaTime);
             visualRoot.localScale = Vector3.Lerp(visualRoot.localScale, targetScale, scaleBlend);
+        }
+
+        private void UpdateVisualSmoothing()
+        {
+            if (visualRoot == null || visualRoot == transform)
+            {
+                return;
+            }
+
+            var targetPosition = transform.TransformPoint(visualBaseLocalPosition);
+            if (!hasVisualPosition)
+            {
+                visualRoot.position = targetPosition;
+                hasVisualPosition = true;
+                return;
+            }
+
+            var blend = 1f - Mathf.Exp(-visualPositionSharpness * Time.deltaTime);
+            visualRoot.position = Vector3.Lerp(visualRoot.position, targetPosition, blend);
         }
 
         private Vector3 EvaluateBounceScale(float progress)
@@ -882,6 +970,24 @@ namespace RorType.Gameplay.AI
             {
                 runtimeMaterialInstance.color = color;
             }
+        }
+
+        private void CacheVisualBasePose()
+        {
+            if (hasVisualBasePose)
+            {
+                return;
+            }
+
+            if (visualRoot == null || visualRoot == transform)
+            {
+                visualBaseLocalPosition = Vector3.zero;
+                hasVisualBasePose = true;
+                return;
+            }
+
+            visualBaseLocalPosition = transform.InverseTransformPoint(visualRoot.position);
+            hasVisualBasePose = true;
         }
 
         private void IgnoreOwnCollisions(Collider projectileCollider)
@@ -1080,6 +1186,103 @@ namespace RorType.Gameplay.AI
             return true;
         }
 
+        private void BeginExplosionSequence(bool preserveHitFlashFrame = false)
+        {
+            if (isDead || explosionRoutine != null)
+            {
+                return;
+            }
+
+            StopNavigation();
+            explosionRoutine = StartCoroutine(PlayExplosionWarningRoutine(preserveHitFlashFrame));
+        }
+
+        private void ApplyExplosionDamage()
+        {
+            var hitCount = Physics.OverlapSphereNonAlloc(
+                GetExplosionCenter(),
+                GetExplosionDamageRadius(),
+                explosionHitBuffer,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+            var uniqueHitCount = 0;
+
+            for (var i = 0; i < hitCount && uniqueHitCount < explosionUniqueHitBuffer.Length; i++)
+            {
+                var hitCollider = explosionHitBuffer[i];
+                if (hitCollider == null)
+                {
+                    continue;
+                }
+
+                if (!CombatUtility.TryGetDamageable(hitCollider, out var damageable, out var damageableComponent))
+                {
+                    continue;
+                }
+
+                if (!damageable.IsAlive || damageable.Team == CombatTeam.Player || ReferenceEquals(damageableComponent, this))
+                {
+                    continue;
+                }
+
+                var alreadyHit = false;
+                for (var uniqueIndex = 0; uniqueIndex < uniqueHitCount; uniqueIndex++)
+                {
+                    if (explosionUniqueHitBuffer[uniqueIndex] == damageableComponent)
+                    {
+                        alreadyHit = true;
+                        break;
+                    }
+                }
+
+                if (alreadyHit)
+                {
+                    continue;
+                }
+
+                explosionUniqueHitBuffer[uniqueHitCount] = damageableComponent;
+                uniqueHitCount++;
+
+                var explosionCenter = GetExplosionCenter();
+                var hitPoint = hitCollider.ClosestPoint(explosionCenter);
+                var hitDirection = damageableComponent.transform.position - explosionCenter;
+                hitDirection.y = 0f;
+                if (hitDirection.sqrMagnitude <= 0.0001f)
+                {
+                    hitDirection = transform.forward;
+                }
+
+                damageable.ReceiveHit(new CombatHitInfo(
+                    explodeDamage,
+                    hitPoint,
+                    hitDirection,
+                    0f,
+                    gameObject,
+                    CombatTeam.Neutral));
+            }
+
+            for (var i = 0; i < hitCount && i < explosionHitBuffer.Length; i++)
+            {
+                explosionHitBuffer[i] = null;
+            }
+
+            for (var i = 0; i < uniqueHitCount; i++)
+            {
+                explosionUniqueHitBuffer[i] = null;
+            }
+        }
+
+        private bool IsExploderInstigator(GameObject instigator)
+        {
+            if (instigator == null)
+            {
+                return false;
+            }
+
+            var instigatorEnemy = instigator.GetComponentInParent<EnemyCapsuleController>();
+            return instigatorEnemy != null && instigatorEnemy.archetype == EnemyCapsuleArchetype.Exploder;
+        }
+
         private void ApplyExplosionKnockback()
         {
             if (playerMotor == null)
@@ -1092,9 +1295,30 @@ namespace RorType.Gameplay.AI
                 return;
             }
 
-            var explosionCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var explosionCenter = GetExplosionCenter();
             var directionToPlayer = playerMotor.transform.position - explosionCenter;
-            TryApplyPlayerKnockback(directionToPlayer, explodeKnockbackForce, explodeVisualRadius);
+            TryApplyPlayerKnockback(directionToPlayer, explodeKnockbackForce, GetExplosionEffectRadius());
+        }
+
+        private Vector3 GetExplosionCenter()
+        {
+            return capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+        }
+
+        private float GetExplosionEffectRadius()
+        {
+            var configuredEffectRadius = Mathf.Max(0.1f, explodeEffectRadius);
+            if (explodeVisualRadius <= 0f)
+            {
+                return configuredEffectRadius;
+            }
+
+            return Mathf.Min(configuredEffectRadius, explodeVisualRadius);
+        }
+
+        private float GetExplosionDamageRadius()
+        {
+            return Mathf.Min(GetExplosionEffectRadius(), Mathf.Max(0.1f, explodeDamageRadius));
         }
 
         private void OnDrawGizmosSelected()
@@ -1107,6 +1331,19 @@ namespace RorType.Gameplay.AI
 
             Gizmos.color = new Color(0.2f, 0.85f, 1f, 0.25f);
             Gizmos.DrawWireSphere(patrolAnchor == Vector3.zero ? transform.position : patrolAnchor, patrolRadius >= 0f ? patrolRadius : DefaultPatrolRadius);
+
+            if (archetype != EnemyCapsuleArchetype.Exploder)
+            {
+                return;
+            }
+
+            var explosionCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+
+            Gizmos.color = new Color(1f, 0.16f, 0.16f, 0.35f);
+            Gizmos.DrawWireSphere(explosionCenter, GetExplosionEffectRadius());
+
+            Gizmos.color = new Color(1f, 0.45f, 0.12f, 0.5f);
+            Gizmos.DrawWireSphere(explosionCenter, GetExplosionDamageRadius());
         }
     }
 }

@@ -119,11 +119,25 @@ namespace RorType.Gameplay.Editor
 
             var rig = cameraObject.GetComponent<TopDownCameraRig>() ?? cameraObject.AddComponent<TopDownCameraRig>();
             rig.SetTarget(target);
+            ApplyCameraRigConfiguration(rig);
 
             cameraObject.transform.position = target.position + new Vector3(-10f, 16f, -10f);
             cameraObject.transform.rotation = Quaternion.LookRotation((target.position + Vector3.up) - cameraObject.transform.position, Vector3.up);
 
             return cameraObject;
+        }
+
+        private static void ApplyCameraRigConfiguration(TopDownCameraRig rig)
+        {
+            var serializedRig = new SerializedObject(rig);
+            serializedRig.FindProperty("followOffset").vector3Value = new Vector3(-10f, 16f, -10f);
+            serializedRig.FindProperty("lookOffset").vector3Value = new Vector3(0f, 1f, 0f);
+            serializedRig.FindProperty("followSharpness").floatValue = 8f;
+            serializedRig.FindProperty("cursorLookAheadDistance").floatValue = 9f;
+            serializedRig.FindProperty("cursorLookAheadSharpness").floatValue = 9f;
+            serializedRig.FindProperty("cursorLookAheadLag").floatValue = 0.28f;
+            serializedRig.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(rig);
         }
 
         private static void SavePlayerPrefab(GameObject player)

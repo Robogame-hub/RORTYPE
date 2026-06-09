@@ -9,6 +9,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 5327625604638039283}
+  - component: {fileID: 901001001001001002}
   m_Layer: 0
   m_Name: Store
   m_TagString: Untagged
@@ -36,6 +37,25 @@ Transform:
   - {fileID: 1873257240624438214}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &901001001001001002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2620513179221679379}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
+  trackedTransform: {fileID: 5327625604638039283}
+  iconGroup: 2
+  presentation: 0
+  iconSprite: {fileID: -2127568409, guid: 6bd6cf3db7f49914aa9e279abbe4de21, type: 3}
+  iconColor: {r: 0, g: 0.43627453, b: 1, a: 1}
+  rotateWithWorldYaw: 0
+  worldOffset: {x: 0, y: 0, z: 0}
 --- !u!1 &4772036546320932096
 GameObject:
   m_ObjectHideFlags: 0

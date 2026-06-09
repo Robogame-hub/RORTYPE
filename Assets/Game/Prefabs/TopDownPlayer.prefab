@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 460000009}
   - component: {fileID: 460000010}
   - component: {fileID: 460000011}
+  - component: {fileID: 460000016}
   m_Layer: 0
   m_Name: TopDownPlayer
   m_TagString: Untagged
@@ -32,6 +33,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000001}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
@@ -39,7 +41,6 @@ Transform:
   m_Children:
   - {fileID: 460000013}
   m_Father: {fileID: 0}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!136 &460000003
 CapsuleCollider:
@@ -128,10 +129,10 @@ Rigidbody:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000001}
-  serializedVersion: 4
+  serializedVersion: 5
   m_Mass: 70
-  m_Drag: 0
-  m_AngularDrag: 0.05
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -170,6 +171,8 @@ MonoBehaviour:
   moveRightKey: 100
   moveForwardKey: 119
   moveBackwardKey: 115
+  fireMouseButton: 0
+  meleeMouseButton: 1
 --- !u!114 &460000008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -220,6 +223,8 @@ MonoBehaviour:
   dashDuration: 0.16
   dashCooldown: 0.65
   allowAirDash: 1
+  knockbackDamping: 18
+  maxExternalPlanarSpeed: 10
 --- !u!114 &460000010
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -233,7 +238,40 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   visualRoot: {fileID: 460000013}
+  feedbackTransform: {fileID: 0}
   turnSpeedDegrees: 720
+  mouseAimRayDistance: 250
+  automaticFire: 1
+  shotInterval: 0.18
+  projectileSpeed: 28
+  projectileLifetime: 1.4
+  projectileMaxDistance: 20
+  projectileRadius: 0.2
+  projectileSpawnForwardOffset: 0.95
+  projectileColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
+  projectileStretchMultiplier: 1.65
+  projectileSquashMultiplier: 0.74
+  projectileScaleRecoverySharpness: 10
+  projectileDamage: 1
+  projectileImpactImpulse: 1
+  automaticMelee: 1
+  meleeInterval: 0.16
+  meleePunchDuration: 0.18
+  meleeForwardReach: 0.72
+  meleeSideOffset: 0.42
+  meleeForwardOffset: 0.5
+  meleeHeightOffset: 0.12
+  meleeFistRadius: 0.2
+  meleeFistColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
+  meleeFistScaleBoost: 0.12
+  meleeFistForwardStretchBoost: 0.18
+  meleeDamage: 2
+  meleeImpactImpulse: 2
+  meleeHitBufferSize: 12
+  bounceDuration: 0.22
+  bounceSideScale: 0.13
+  bounceHeightScale: 0.2
+  bounceScaleSharpness: 24
 --- !u!114 &460000011
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -249,6 +287,25 @@ MonoBehaviour:
   fallDistance: 6
   safePointMinDistance: 1.5
   respawnHeightOffset: 1.05
+--- !u!114 &460000016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 460000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
+  trackedTransform: {fileID: 460000002}
+  iconGroup: 0
+  presentation: 1
+  iconSprite: {fileID: 0}
+  iconColor: {r: 0.09224105, g: 1, b: 0, a: 1}
+  rotateWithWorldYaw: 1
+  worldOffset: {x: 0, y: 0, z: 0}
 --- !u!1 &460000012
 GameObject:
   m_ObjectHideFlags: 0
@@ -274,13 +331,13 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000012}
+  serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 460000002}
-  m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &460000014
 MeshRenderer:

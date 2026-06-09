@@ -306,7 +306,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c59dbc7b58594d24a84e63ef852c5e0c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.AI.EnemySpawnZone
-  maxActiveEnemies: 40
+  maxActiveEnemies: 25
+  maxTotalSpawnCount: 50
+  initialSpawnCountPerPoint: 3
   minSpawnInterval: 3.5
   maxSpawnInterval: 6
   navMeshSampleDistance: 2

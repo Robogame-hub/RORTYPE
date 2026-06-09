@@ -10,9 +10,11 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float followSharpness = 8f;
         [SerializeField, Min(0f)] private float cursorLookAheadDistance = 9f;
         [SerializeField, Min(0.01f)] private float cursorLookAheadSharpness = 9f;
+        [SerializeField, Min(0.01f)] private float cursorLookAheadLag = 0.28f;
 
         private Vector3 smoothedTargetPosition;
         private Vector3 smoothedLookAheadOffset;
+        private Vector3 smoothedLookAheadVelocity;
         private bool hasSmoothedTargetPosition;
 
         public void SetTarget(Transform newTarget)
@@ -20,6 +22,7 @@ namespace RorType.Gameplay.Player
             target = newTarget;
             hasSmoothedTargetPosition = false;
             smoothedLookAheadOffset = Vector3.zero;
+            smoothedLookAheadVelocity = Vector3.zero;
         }
 
         private void LateUpdate()
@@ -33,6 +36,8 @@ namespace RorType.Gameplay.Player
             if (!hasSmoothedTargetPosition)
             {
                 smoothedTargetPosition = target.position;
+                smoothedLookAheadOffset = ResolveCursorLookAhead();
+                smoothedLookAheadVelocity = Vector3.zero;
                 hasSmoothedTargetPosition = true;
             }
             else
@@ -41,8 +46,14 @@ namespace RorType.Gameplay.Player
             }
 
             var desiredLookAhead = ResolveCursorLookAhead();
-            var lookAheadBlend = 1f - Mathf.Exp(-cursorLookAheadSharpness * Time.deltaTime);
-            smoothedLookAheadOffset = Vector3.Lerp(smoothedLookAheadOffset, desiredLookAhead, lookAheadBlend);
+            var lookAheadMaxSpeed = Mathf.Max(1f, cursorLookAheadDistance * Mathf.Max(1f, cursorLookAheadSharpness));
+            smoothedLookAheadOffset = Vector3.SmoothDamp(
+                smoothedLookAheadOffset,
+                desiredLookAhead,
+                ref smoothedLookAheadVelocity,
+                cursorLookAheadLag,
+                lookAheadMaxSpeed,
+                Time.deltaTime);
 
             var framedTargetPosition = smoothedTargetPosition + smoothedLookAheadOffset;
             transform.position = framedTargetPosition + followOffset;

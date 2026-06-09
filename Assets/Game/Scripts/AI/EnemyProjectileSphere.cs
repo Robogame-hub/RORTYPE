@@ -117,6 +117,11 @@ namespace RorType.Gameplay.AI
                 return;
             }
 
+            if (other != null && other.GetComponentInParent<EnemyProjectileSphere>() != null)
+            {
+                return;
+            }
+
             if (other != null && other.isTrigger && other.GetComponentInParent<IKnockbackReceiver>() == null)
             {
                 return;
