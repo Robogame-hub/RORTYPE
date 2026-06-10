@@ -137,12 +137,13 @@
 
 Быстрое перемещение не предусмотрено.
 
-### Текущая реализация миникарты на 2026-06-09
+### Текущая реализация миникарты на 2026-06-10
 
 В репозиторий добавлен код миникарты как отдельной scene-bound UI-системы:
 
 - `Assets/Game/Scripts/UI/MinimapController.cs`
 - `Assets/Game/Scripts/UI/MinimapTrackable.cs`
+- `Assets/Game/Scripts/UI/MinimapMarkerGraphic.cs`
 - `Assets/Game/Editor/MinimapBuilder.cs`
 
 Принята такая рабочая схема:
@@ -150,18 +151,22 @@
 - миникарта живёт как prefab в сцене, в правом верхнем углу
 - каждая сцена должна использовать свою картинку карты
 - размер карты в мировых метрах задаётся через сериализованные поля
-- иконки объектов задаются в prefab самих world-объектов через `MinimapTrackable`
-- новые UI-иконки не должны создаваться через runtime instantiate; вместо этого используется заранее подготовленный пул слотов
+- маркеры объектов задаются в prefab самих world-объектов через `MinimapTrackable`
+- новые UI-маркеры не должны создаваться через runtime instantiate; вместо этого используется заранее подготовленный пул слотов
+- рисование маркеров делается через `MinimapMarkerGraphic`, то есть без внешних scene-specific icon sprite для trackable-объектов
 
 Для первого боевого уровня приняты стартовые данные:
 
 - картинка карты: `Assets/Game/Minimap_var_2.png`
-- стартовый размер мира для ручной подгонки: `500 x 500` метров
-- цвет игрока: зелёный
-- цвет врагов: красный
-- цвет остальных интерактивов: синий
+- размер prefab миникарты: `500 x 500` UI-единиц
+- прозрачность изображения карты: `0.75`
+- стартовый размер мира в контроллере prefab: `500 x 500` метров, но scene instance в `Level_1` дополнительно получает рассчитанные bounds по текущим trackable-объектам
+- маркер игрока: зелёная стрелка
+- маркеры врагов: красные кресты
+- маркеры сундуков и капсул: синие кресты
+- маркеры точек интереса: `Store` синий квадрат, `Portal` синий круг, `HAMMER` синий треугольник
 
-Важно: в проект возвращён `MinimapBuilder`, и через него уже создан `Assets/Game/Prefabs/UI/Minimap.prefab`, а также инстанс `MinimapCanvas` в `Assets/Game/Scene/Level_1.unity`. При этом финальные спрайты, цвета и размеры карты в метрах всё равно остаются ручными inspector-настройками на `MinimapTrackable` и `MinimapController`.
+Важно: в проект возвращён `MinimapBuilder`, и через него уже создан `Assets/Game/Prefabs/UI/Minimap.prefab`, а также инстанс `MinimapCanvas` в `Assets/Game/Scene/Level_1.unity`. Для `Level_1` builder также навешивает недостающий `MinimapTrackable` на scene-local `TopDownPlayer` и другие именованные объекты уровня, чтобы маркер игрока не зависел от того, является ли объект prefab instance. Финальные цвета, формы и размеры карты в метрах всё равно остаются ручными inspector-настройками на `MinimapTrackable` и `MinimapController`.
 
 ### Действия игрока
 
@@ -540,3 +545,15 @@
 - `EnemyCapsuleController` использует такой же LateUpdate-smoothing для `visualRoot`, поэтому NavMesh-движение врагов больше не должно давать покадровое подёргивание модели.
 - Для scene-local игрока в `Assets/Game/Scene/Level_1.unity` дополнительно зафиксирован `groundSnapOffset = 0.02`, чтобы grounded-снап оставался стабильным и не провоцировал лишнее дрожание на поверхности.
 - `TopDownCameraRig` теперь дополнительно смещает framing в сторону курсора через cursor-lookahead, но сам lookahead проходит через отдельный `lag` (`cursorLookAheadLag = 0.28` по умолчанию), чтобы офсет не рывком улетал к курсору.
+
+## Current portal travel implementation on 2026-06-10
+
+Portal travel is now implemented as a real runtime scene-travel slice and no longer exists only at the design-document level.
+
+- `Assets/Game/Prefabs/Portal.prefab` is configured with `ScenePortal`, but portal routing is no longer hardcoded in the script. Each portal instance is now configured manually through a serialized `destinations` list, so the level setup decides where the portal can lead.
+- Portal interaction uses `E`, and the hint is handled by runtime UI instead of hand-authored scene canvases. Active portal discovery now uses trigger contact, not a raw distance check.
+- `Assets/Game/Prefabs/Portal.prefab` has an explicit root `SphereCollider` trigger with `7m` radius. If a custom or older portal root has no trigger collider, `ScenePortal` auto-creates a runtime `SphereCollider` trigger using `interactionRadius`, so those instances still get an active interaction volume.
+- While the player is touching the portal trigger, `ScenePortal` recolors the child mesh renderer(s) named `Sphere`, so the portal provides an in-world proximity signal in addition to the UI prompt.
+- Multi-destination portals open a runtime button choice panel (`PortalUiRuntime`) with mouse-click support and `1..9` keyboard shortcuts. Single-destination portals load the target scene immediately.
+- Spawn-point-based arrival has been removed. The repository now goes back to manual scene-local player placement: each gameplay scene contains its own player prefab instance, and scene load no longer applies a post-load teleport to a separate arrival marker.
+- The old spawn runtime (`PlayerSpawnPoint`, `PlayerSceneSpawnController`, `PortalTravelRuntime`) and the previous portal builder script are no longer part of the accepted implementation.

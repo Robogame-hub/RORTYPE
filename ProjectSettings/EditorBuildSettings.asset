@@ -8,5 +8,20 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Game/Scene/PlayerMovementTest.unity
     guid: c3d823c9f2494e8d9d5e1b14d70db777
+  - enabled: 1
+    path: Assets/Game/Scene/Level_1.unity
+    guid: faacc1b854ff13640ac165b37403be58
+  - enabled: 1
+    path: Assets/Game/Scene/Hub_1.unity
+    guid: 63e3886d9165a1444ac9a0bef289c86c
+  - enabled: 1
+    path: Assets/Game/Scene/Level_2.unity
+    guid: d67f039dacec2754ea0a5f96e7d72411
+  - enabled: 1
+    path: Assets/Game/Scene/Hub_2.unity
+    guid: b1ace64ae34c9d041a57a22181620c98
+  - enabled: 1
+    path: Assets/Game/Scene/Level_3.unity
+    guid: 22185b7bef5497d41b695848ca834b50
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0

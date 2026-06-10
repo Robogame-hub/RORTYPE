@@ -474,3 +474,24 @@
 2. Добавить простой encounter/spawn flow поверх уже готовых enemy prefab.
 3. Подготовить scene-bound minimap prefab без runtime-создания новых UI-элементов и с полями размеров карты в метрах.
 4. Только после этого переходить к наградам, ресурсам и loop комнаты.
+
+### Новый подэтап roadmap: portal scene travel
+
+Добавить отдельный практический шаг в план между текущим UI/navigation slice и полноценным `Hub MVP`:
+
+1. Ввести рабочую сеть переходов между существующими сценами:
+   - `Level_1 -> Hub_1`
+   - `Hub_1 -> Level_1` и `Level_2`
+   - `Level_2 -> Hub_2`
+   - `Hub_2 -> Level_2` и `Level_3`
+   - `Level_3 -> Hub_2`
+2. Move portals to a manual per-instance destination list on the prefab/scene objects, with no hardcoded scene graph and no spawn-point logic.
+3. Сделать interaction с порталом на `E`, с большим радиусом подсказки и scene-travel без ручной перетяжки игрока между сценами.
+4. Для сцен, где у портала больше одного выхода, открыть runtime UI с кнопками выбора назначения вместо мгновенного перехода.
+5. Обновить `EditorBuildSettings`, чтобы все gameplay-сцены участвовали в одном реальном travel loop, а не существовали изолированно от `PlayerMovementTest`.
+
+Критерий выхода:
+
+- пользователь может расставить портал prefab в сцене и получить корректный переход по принятой сети сцен;
+- пользователь может расставить spawn point prefab и контролировать точку появления игрока после загрузки сцены;
+- `Hub_1` и `Hub_2` уже поддерживают выбор направления через UI-кнопки, без дополнительного scene-specific UI hand setup.

@@ -334,10 +334,25 @@
 - Enemies hit by exploder damage should keep the same hit-flash feedback as when hit by the player; exploder-to-exploder chain hits preserve a flash frame before the warning explosion starts.
 - `EnemySpawnZone` instantiates enemies as children of the zone transform, so enemy AOE self-filtering must compare the resolved damageable/component directly and not rely on shared `transform.root`.
 
-## 2026-06-09 minimap note
+## 2026-06-10 minimap note
 
-- Minimap implementation is now split into `MinimapController` plus `MinimapTrackable`, with a scene-bound prefab workflow and no runtime instantiation of new UI icon objects.
-- `Assets/Game/Minimap_var_2.png` is the accepted Level 1 minimap image; initial world size for manual fitting is `500 x 500` meters.
-- Minimap icon ownership belongs to world prefab settings: `TopDownPlayer`, `HAMMER`, `Store`, `Capsule`, `Portal`, `Chest`, `EnemyShooter`, `EnemyMelee`, and `EnemyExploder`.
-- Player minimap marker is a green arrow built from UI shapes; enemy icons are red; all other tracked interactives are blue by default.
-- `MinimapTrackable` is attached directly on the listed prefabs, both `iconSprite` and `iconColor` remain inspector-editable, and `Assets/Game/Editor/MinimapBuilder.cs` is the regeneration path for `Assets/Game/Prefabs/UI/Minimap.prefab` plus the `MinimapCanvas` instance in `Level_1.unity`.
+- Minimap implementation now uses `MinimapController`, `MinimapTrackable`, and `MinimapMarkerGraphic`; tracked objects no longer rely on per-object sprite icons and instead use prebuilt UI shape markers with no runtime instantiation of new marker objects.
+- `Assets/Game/Minimap_var_2.png` remains the Level 1 minimap image; the minimap prefab itself is now built at `500 x 500` UI size with map alpha `0.75`, while world-space fitting remains inspector-adjustable through serialized meter fields on the controller.
+- Marker ownership still belongs to world prefab settings: `TopDownPlayer`, `HAMMER`, `Store`, `Capsule`, `Portal`, `Chest`, `EnemyShooter`, `EnemyMelee`, and `EnemyExploder`.
+- Accepted marker convention is now: player `green arrow`, enemies `red cross`, chest/capsule `blue cross`, `Store` `blue square`, `Portal` `blue circle`, `HAMMER` `blue triangle`.
+- `Assets/Game/Editor/MinimapBuilder.cs` is the regeneration path for `Assets/Game/Prefabs/UI/Minimap.prefab`; for `Level_1.unity` it also attaches missing scene-local `MinimapTrackable` components to named objects like `TopDownPlayer` and derives scene minimap bounds from current trackable positions so markers do not default to the map corner.
+
+## 2026-06-10 portal travel note
+
+- Portal travel is now fully portal-instance-driven instead of relying on a hardcoded scene graph. Each `ScenePortal` exposes a serialized `destinations` list, and every destination now stores only `buttonLabel` plus `sceneName`.
+- Spawn-point-based scene arrival has been removed. `PlayerSpawnPoint`, `PlayerSceneSpawnController`, `PortalTravelRuntime`, the old `PlayerSpawnPoint` prefab, and `PortalSystemBuilder` are no longer part of the accepted portal workflow.
+- The player still interacts with portals via `E`, but active portal discovery is now trigger-contact-based: `ScenePortal` tracks `ScenePortalInteractionController` instances inside its trigger zone, and `ScenePortalInteractionController` only prompts/interacts with touched portals.
+- `interactionRadius` remains the accepted default trigger radius (`7m`). `Assets/Game/Prefabs/Portal.prefab` has an explicit root `SphereCollider` trigger, and `ScenePortal` still auto-creates one at runtime if an older/custom portal root has no trigger collider.
+- `ScenePortal` now recolors the child renderer(s) named `Sphere` when the player is touching the active trigger zone. The prefab-default colors are an idle blue tint and a brighter green-blue active tint.
+- When a portal has more than one destination, `PortalUiRuntime` still opens a runtime uGUI choice panel with clickable buttons and numeric hotkeys; single-destination portals load the configured target scene immediately.
+- Scene-local player placement is now manual again: gameplay scenes keep their own player prefab instances, and scene transitions do not reposition the arriving player after load.
+
+## 2026-06-10 gear rotation note
+
+- `Assets/Game/Prefabs/Environment/Gear.prefab` now has `GearRotator` on the root object, so placed gear instances rotate immediately without extra scene setup.
+- `Assets/Game/Scripts/Environment/GearRotator.cs` rotates in `Space.Self`; the inspector-exposed enum selects the local axis (`X`, `Y`, `Z`), and the prefab default is `Y` at `90 deg/sec`.
