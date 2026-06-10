@@ -339,7 +339,7 @@
 - Minimap implementation now uses `MinimapController`, `MinimapTrackable`, and `MinimapMarkerGraphic`; tracked objects no longer rely on per-object sprite icons and instead use prebuilt UI shape markers with no runtime instantiation of new marker objects.
 - `Assets/Game/Minimap_var_2.png` remains the Level 1 minimap image; the minimap prefab itself is now built at `500 x 500` UI size with map alpha `0.75`, while world-space fitting remains inspector-adjustable through serialized meter fields on the controller.
 - Marker ownership still belongs to world prefab settings: `TopDownPlayer`, `HAMMER`, `Store`, `Capsule`, `Portal`, `Chest`, `EnemyShooter`, `EnemyMelee`, and `EnemyExploder`.
-- Accepted marker convention is now: player `green arrow`, enemies `red cross`, chest/capsule `blue cross`, `Store` `blue square`, `Portal` `blue circle`, `HAMMER` `blue triangle`.
+- Accepted marker convention is now: player `green circle`, enemies `red cross`, chest/capsule `blue cross`, `Store` `blue square`, `Portal` `blue circle`, `HAMMER` `blue triangle`.
 - `Assets/Game/Editor/MinimapBuilder.cs` is the regeneration path for `Assets/Game/Prefabs/UI/Minimap.prefab`; for `Level_1.unity` it also attaches missing scene-local `MinimapTrackable` components to named objects like `TopDownPlayer` and derives scene minimap bounds from current trackable positions so markers do not default to the map corner.
 
 ## 2026-06-10 portal travel note
@@ -356,3 +356,17 @@
 
 - `Assets/Game/Prefabs/Environment/Gear.prefab` now has `GearRotator` on the root object, so placed gear instances rotate immediately without extra scene setup.
 - `Assets/Game/Scripts/Environment/GearRotator.cs` rotates in `Space.Self`; the inspector-exposed enum selects the local axis (`X`, `Y`, `Z`), and the prefab default is `Y` at `90 deg/sec`.
+
+## 2026-06-10 spawn zone cleanup note
+
+- `EnemySpawnZone` now waits `30` seconds after the last player leaves the zone trigger before destroying enemies spawned by that zone.
+- Re-entering the zone before the delay expires cancels the cleanup timer, so quick exit/return keeps the encounter intact.
+- Leaving a zone does not reset `encounterActivated` or `totalSpawnedEnemies`; the per-encounter spawn budget remains consumed by enemies that were already spawned.
+
+## 2026-06-10 manual scene setup rule
+
+- New accepted workflow: no more new editor builders, runtime builders, or Play Mode generation for scene setup.
+- Scene objects must be configured directly in the Unity scene; prefabs must be created or updated manually and serialized references must be wired explicitly.
+- Minimap must work independently per scene. Copying `MinimapCanvas` from `Level_1` to another level is not sufficient unless that scene also has its own map image/bounds and `MinimapTrackable` components on its scene-local player and points of interest.
+- This supersedes the earlier minimap note that treated `Assets/Game/Editor/MinimapBuilder.cs` as an accepted regeneration path.
+- Player minimap marker is a green circle, not an arrow; player trackables should use `markerShape = Circle` and should not rotate with world yaw.

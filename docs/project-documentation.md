@@ -161,12 +161,14 @@
 - размер prefab миникарты: `500 x 500` UI-единиц
 - прозрачность изображения карты: `0.75`
 - стартовый размер мира в контроллере prefab: `500 x 500` метров, но scene instance в `Level_1` дополнительно получает рассчитанные bounds по текущим trackable-объектам
-- маркер игрока: зелёная стрелка
+- маркер игрока: зелёный кружок
 - маркеры врагов: красные кресты
 - маркеры сундуков и капсул: синие кресты
 - маркеры точек интереса: `Store` синий квадрат, `Portal` синий круг, `HAMMER` синий треугольник
 
 Важно: в проект возвращён `MinimapBuilder`, и через него уже создан `Assets/Game/Prefabs/UI/Minimap.prefab`, а также инстанс `MinimapCanvas` в `Assets/Game/Scene/Level_1.unity`. Для `Level_1` builder также навешивает недостающий `MinimapTrackable` на scene-local `TopDownPlayer` и другие именованные объекты уровня, чтобы маркер игрока не зависел от того, является ли объект prefab instance. Финальные цвета, формы и размеры карты в метрах всё равно остаются ручными inspector-настройками на `MinimapTrackable` и `MinimapController`.
+
+Обновленное правило на 2026-06-10: дальнейшая настройка сцен больше не должна опираться на новые editor-builder scripts, runtime-builder scripts или генерацию в Play Mode. Сцены настраиваются руками прямо в Unity-сцене, prefabs создаются и обновляются вручную, а serialized references связываются явно. Для миникарты это означает, что каждый уровень должен иметь собственный настроенный scene instance: корректную картинку/границы карты и `MinimapTrackable` на scene-local игроке, сундуках, порталах, магазинах, кузнице, капсулах, врагах и других точках интереса. Простое копирование `MinimapCanvas` из `Level_1` на другой уровень не считается завершенной настройкой, если маркеры игрока и POI не подключены в этой сцене.
 
 ### Действия игрока
 
@@ -557,3 +559,11 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 - Multi-destination portals open a runtime button choice panel (`PortalUiRuntime`) with mouse-click support and `1..9` keyboard shortcuts. Single-destination portals load the target scene immediately.
 - Spawn-point-based arrival has been removed. The repository now goes back to manual scene-local player placement: each gameplay scene contains its own player prefab instance, and scene load no longer applies a post-load teleport to a separate arrival marker.
 - The old spawn runtime (`PlayerSpawnPoint`, `PlayerSceneSpawnController`, `PortalTravelRuntime`) and the previous portal builder script are no longer part of the accepted implementation.
+
+## Current spawn zone cleanup implementation on 2026-06-10
+
+- `EnemySpawnZone` starts a cleanup countdown when the last player leaves the zone trigger.
+- The default cleanup delay is `30` seconds through `cleanupDelayAfterPlayerExit`.
+- If the player re-enters the zone before the countdown expires, cleanup is cancelled and the existing spawned enemies remain alive.
+- When the countdown expires, the zone destroys only enemies it spawned and clears its active enemy list.
+- Cleanup does not reset `encounterActivated` or `totalSpawnedEnemies`, so the zone keeps its existing encounter state and consumed spawn budget.

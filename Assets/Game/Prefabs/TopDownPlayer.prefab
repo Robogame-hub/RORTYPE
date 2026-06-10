@@ -303,10 +303,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
   trackedTransform: {fileID: 460000002}
   iconGroup: 0
-  markerShape: 4
+  markerShape: 3
   iconColor: {r: 0.15, g: 0.9, b: 0.25, a: 1}
   markerSize: 20
-  rotateWithWorldYaw: 1
+  rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}
 --- !u!114 &460000018
 MonoBehaviour:

@@ -22,6 +22,7 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0.1f)] private float maxSpawnInterval = 6f;
         [SerializeField, Min(0.1f)] private float navMeshSampleDistance = 2f;
         [SerializeField, Min(0.1f)] private float spawnPointBlockedRadius = 0.8f;
+        [SerializeField, Min(0f)] private float cleanupDelayAfterPlayerExit = 30f;
 
         [Header("Enemy Prefabs")]
         [SerializeField] private EnemyCapsuleController meleePrefab;
@@ -38,9 +39,11 @@ namespace RorType.Gameplay.AI
         private readonly HashSet<Transform> playersInside = new();
         private BoxCollider triggerZone;
         private float spawnTimer;
+        private float exitCleanupTimer;
         private int totalSpawnedEnemies;
         private bool encounterActivated;
         private bool spawnTimerInitialized;
+        private bool exitCleanupTimerActive;
 
         private void Awake()
         {
@@ -56,6 +59,11 @@ namespace RorType.Gameplay.AI
                 maxSpawnInterval = minSpawnInterval;
             }
 
+            if (cleanupDelayAfterPlayerExit < 0f)
+            {
+                cleanupDelayAfterPlayerExit = 0f;
+            }
+
             triggerZone = GetComponent<BoxCollider>();
             if (triggerZone != null)
             {
@@ -68,6 +76,7 @@ namespace RorType.Gameplay.AI
         private void Update()
         {
             CleanupDestroyedEnemies();
+            TickExitCleanupTimer();
 
             if (!encounterActivated
                 || !IsPlayerInside()
@@ -125,6 +134,7 @@ namespace RorType.Gameplay.AI
             }
 
             playersInside.Add(player.transform.root);
+            CancelExitCleanupTimer();
             TryActivateEncounter();
         }
 
@@ -137,6 +147,10 @@ namespace RorType.Gameplay.AI
             }
 
             playersInside.Remove(player.transform.root);
+            if (!IsPlayerInside())
+            {
+                StartExitCleanupTimer();
+            }
         }
 
         private bool TrySpawnEnemy()
@@ -440,6 +454,61 @@ namespace RorType.Gameplay.AI
             }
 
             playersInside.RemoveWhere(player => player == null);
+        }
+
+        private void ClearActiveEnemies()
+        {
+            for (var i = activeEnemies.Count - 1; i >= 0; i--)
+            {
+                var enemy = activeEnemies[i];
+                if (enemy != null)
+                {
+                    Destroy(enemy.gameObject);
+                }
+            }
+
+            activeEnemies.Clear();
+            spawnTimerInitialized = false;
+            exitCleanupTimerActive = false;
+            exitCleanupTimer = 0f;
+        }
+
+        private void StartExitCleanupTimer()
+        {
+            exitCleanupTimer = Mathf.Max(0f, cleanupDelayAfterPlayerExit);
+            exitCleanupTimerActive = true;
+            spawnTimerInitialized = false;
+
+            if (exitCleanupTimer <= 0f)
+            {
+                ClearActiveEnemies();
+            }
+        }
+
+        private void CancelExitCleanupTimer()
+        {
+            exitCleanupTimerActive = false;
+            exitCleanupTimer = 0f;
+        }
+
+        private void TickExitCleanupTimer()
+        {
+            if (!exitCleanupTimerActive)
+            {
+                return;
+            }
+
+            if (IsPlayerInside())
+            {
+                CancelExitCleanupTimer();
+                return;
+            }
+
+            exitCleanupTimer -= Time.deltaTime;
+            if (exitCleanupTimer <= 0f)
+            {
+                ClearActiveEnemies();
+            }
         }
 
         private bool IsPlayerInside()
