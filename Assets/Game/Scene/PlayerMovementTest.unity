@@ -1152,6 +1152,7 @@ GameObject:
   - component: {fileID: 300100009}
   - component: {fileID: 300100010}
   - component: {fileID: 300100011}
+  - component: {fileID: 300100016}
   m_Layer: 0
   m_Name: TopDownPlayer
   m_TagString: Untagged
@@ -1353,6 +1354,8 @@ MonoBehaviour:
   dashDistance: 5
   dashDuration: 0.16
   dashCooldown: 0.65
+  maxDashCharges: 2
+  dashChargeRecoveryTime: 5
   allowAirDash: 1
 --- !u!114 &300100010
 MonoBehaviour:
@@ -1383,6 +1386,24 @@ MonoBehaviour:
   fallDistance: 6
   safePointMinDistance: 1.5
   respawnHeightOffset: 1.05
+--- !u!114 &300100016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 18328b5d6cf04ebb9d07edf71443e4a2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Player.PlayerResourceController
+  maxAmmo: 999
+  startingAmmo: 100
+  maxStamina: 100
+  sprintDrainPerSecond: 25
+  staminaRegenPerSecond: 35
+  staminaRegenDelay: 0.45
 --- !u!1 &300100012
 GameObject:
   m_ObjectHideFlags: 0

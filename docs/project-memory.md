@@ -370,3 +370,20 @@
 - Minimap must work independently per scene. Copying `MinimapCanvas` from `Level_1` to another level is not sufficient unless that scene also has its own map image/bounds and `MinimapTrackable` components on its scene-local player and points of interest.
 - This supersedes the earlier minimap note that treated `Assets/Game/Editor/MinimapBuilder.cs` as an accepted regeneration path.
 - Player minimap marker is a green circle, not an arrow; player trackables should use `markerShape = Circle` and should not rotate with world yaw.
+
+## 2026-06-10 door button note
+
+- `Assets/Game/Scripts/Interaction/SlidingDoor.cs` moves a configured door root from its closed local position to an inspector-defined open offset; the first Level 1 setup opens downward with `openLocalOffset = (0, -5.5, 0)`.
+- `Assets/Game/Scripts/Interaction/DoorPressureButton.cs` is a trigger pressure plate that detects the same player interaction component used by portals (`ScenePortalInteractionController`), turns its indicator renderers/lights red while idle and green when pressed, and opens linked `SlidingDoor` references.
+- The accepted default for this first button is latched: once the player steps on it, it remains green and the linked door stays open.
+- `Assets/Game/Scene/Level_1.unity` now contains a manually placed `DoorButtonPuzzle` near the scene-local `TopDownPlayer` start position for quick testing.
+
+## 2026-06-10 interaction resources note
+
+- Player resources are now represented by `PlayerResourceController`: starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `25/sec`, stamina regen `35/sec` after `0.45 sec`.
+- Player shooting consumes `1` ammo per projectile. At `0` ammo ranged fire is blocked, while melee remains available.
+- Player dash now uses `2` charges. One charge recovers every `5 sec`; the small dash cooldown still prevents same-frame dash spam.
+- `PlayerStatusUiRuntime` creates the bottom-right runtime HUD for ammo, two dash charge rectangles, and stamina.
+- `WorldInteractable` extends the portal-style `E` interaction flow to non-portal objects through root `SphereCollider` triggers.
+- `Store` and `HAMMER` use purchase prompts and show a short bought feedback message.
+- `Chest` and `Capsule` are one-shot ammo pickups: chest gives `20`, capsule gives `50`, then disables its minimap marker and trigger interaction.

@@ -7,6 +7,7 @@ namespace RorType.Gameplay.Player
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(TopDownInputAdapter))]
     [RequireComponent(typeof(TopDownGroundProbe))]
+    [RequireComponent(typeof(PlayerResourceController))]
     public sealed class TopDownPlayerMotor : MonoBehaviour, IKnockbackReceiver
     {
         [Header("References")]
@@ -33,6 +34,8 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.1f)] private float dashDistance = 5f;
         [SerializeField, Min(0.01f)] private float dashDuration = 0.16f;
         [SerializeField, Min(0f)] private float dashCooldown = 0.65f;
+        [SerializeField, Min(1)] private int maxDashCharges = 2;
+        [SerializeField, Min(0.01f)] private float dashChargeRecoveryTime = 5f;
         [SerializeField] private bool allowAirDash = true;
 
         [Header("Impact")]
@@ -43,6 +46,7 @@ namespace RorType.Gameplay.Player
         private CapsuleCollider capsuleCollider;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
+        private PlayerResourceController resources;
         private Vector3 planarVelocity;
         private Vector3 externalPlanarVelocity;
         private Vector3 dashDirection = Vector3.forward;
@@ -52,6 +56,8 @@ namespace RorType.Gameplay.Player
         private float groundSnapLockTimer;
         private float dashTimer;
         private float dashCooldownTimer;
+        private float dashChargeRecoveryTimer;
+        private int dashCharges;
         private bool dashQueued;
         private bool airDashConsumed;
         private bool isGroundedForLocomotion;
@@ -64,6 +70,8 @@ namespace RorType.Gameplay.Player
         public bool IsGrounded => isGroundedForLocomotion;
         public bool IsSprinting { get; private set; }
         public bool IsDashing => dashTimer > 0f;
+        public int DashCharges => dashCharges;
+        public int MaxDashCharges => maxDashCharges;
 
         private void Awake()
         {
@@ -71,8 +79,10 @@ namespace RorType.Gameplay.Player
             capsuleCollider = GetComponent<CapsuleCollider>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
             groundProbe = GetComponent<TopDownGroundProbe>();
+            resources = GetComponent<PlayerResourceController>();
             visualRoot = ResolveVisualRoot();
             CacheVisualBasePose();
+            dashCharges = Mathf.Max(1, maxDashCharges);
 
             body.useGravity = false;
             body.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
@@ -119,7 +129,7 @@ namespace RorType.Gameplay.Player
                 LastWorldMoveDirection = desiredDirection;
             }
 
-            IsSprinting = !IsDashing && inputMagnitude > 0.1f && inputAdapter.SprintHeld;
+            IsSprinting = !IsDashing && inputMagnitude > 0.1f && inputAdapter.SprintHeld && CanSprint(Time.fixedDeltaTime);
             var targetSpeed = IsDashing
                 ? GetDashSpeed()
                 : (IsSprinting ? sprintSpeed : walkSpeed) * inputMagnitude;
@@ -187,6 +197,8 @@ namespace RorType.Gameplay.Player
             groundSnapLockTimer = 0f;
             dashTimer = 0f;
             dashCooldownTimer = 0f;
+            dashChargeRecoveryTimer = 0f;
+            dashCharges = Mathf.Max(1, maxDashCharges);
             dashQueued = false;
             airDashConsumed = false;
             externalPlanarVelocity = Vector3.zero;
@@ -255,6 +267,8 @@ namespace RorType.Gameplay.Player
         {
             sprintSpeed = Mathf.Max(sprintSpeed, walkSpeed);
             dashDuration = Mathf.Max(0.01f, dashDuration);
+            maxDashCharges = Mathf.Max(1, maxDashCharges);
+            dashChargeRecoveryTime = Mathf.Max(0.01f, dashChargeRecoveryTime);
         }
 
         private float ResolveGroundedBodyPositionY()
@@ -273,6 +287,7 @@ namespace RorType.Gameplay.Player
             groundSnapLockTimer = Mathf.Max(0f, groundSnapLockTimer - deltaTime);
             dashTimer = Mathf.Max(0f, dashTimer - deltaTime);
             dashCooldownTimer = Mathf.Max(0f, dashCooldownTimer - deltaTime);
+            TickDashChargeRecovery(deltaTime);
         }
 
         private void UpdateVisualSmoothing()
@@ -349,12 +364,12 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            if (!allowAirDash && !isGroundedForLocomotion && coyoteTimer <= 0f)
+            if (dashCharges <= 0)
             {
                 return;
             }
 
-            if (!isGroundedForLocomotion && coyoteTimer <= 0f && airDashConsumed)
+            if (!allowAirDash && !isGroundedForLocomotion && coyoteTimer <= 0f)
             {
                 return;
             }
@@ -369,10 +384,46 @@ namespace RorType.Gameplay.Player
             LastWorldMoveDirection = dashDirection;
             dashTimer = dashDuration;
             dashCooldownTimer = dashCooldown;
+            dashCharges = Mathf.Max(0, dashCharges - 1);
+            if (dashCharges < maxDashCharges && dashChargeRecoveryTimer <= 0f)
+            {
+                dashChargeRecoveryTimer = dashChargeRecoveryTime;
+            }
+
             if (!isGroundedForLocomotion && coyoteTimer <= 0f)
             {
                 airDashConsumed = true;
             }
+        }
+
+        private bool CanSprint(float deltaTime)
+        {
+            if (resources == null)
+            {
+                resources = GetComponent<PlayerResourceController>();
+            }
+
+            return resources == null || resources.TryConsumeSprint(deltaTime);
+        }
+
+        private void TickDashChargeRecovery(float deltaTime)
+        {
+            maxDashCharges = Mathf.Max(1, maxDashCharges);
+            if (dashCharges >= maxDashCharges)
+            {
+                dashCharges = maxDashCharges;
+                dashChargeRecoveryTimer = 0f;
+                return;
+            }
+
+            dashChargeRecoveryTimer -= deltaTime;
+            if (dashChargeRecoveryTimer > 0f)
+            {
+                return;
+            }
+
+            dashCharges = Mathf.Min(maxDashCharges, dashCharges + 1);
+            dashChargeRecoveryTimer = dashCharges < maxDashCharges ? dashChargeRecoveryTime : 0f;
         }
 
         private Vector3 ResolveDashDirection()

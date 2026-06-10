@@ -567,3 +567,21 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 - If the player re-enters the zone before the countdown expires, cleanup is cancelled and the existing spawned enemies remain alive.
 - When the countdown expires, the zone destroys only enemies it spawned and clears its active enemy list.
 - Cleanup does not reset `encounterActivated` or `totalSpawnedEnemies`, so the zone keeps its existing encounter state and consumed spawn budget.
+
+## Current door button implementation on 2026-06-10
+
+- Door/button gameplay is now implemented with `Assets/Game/Scripts/Interaction/SlidingDoor.cs` and `Assets/Game/Scripts/Interaction/DoorPressureButton.cs`.
+- `SlidingDoor` moves its configured root from the closed local position toward an inspector-defined open offset. The first Level 1 door opens from top to bottom by moving downward.
+- `DoorPressureButton` is a pressure plate trigger: the player activates it by standing on it, using the same player-side `ScenePortalInteractionController` contact identity used by portal interaction.
+- The button indicator renderer and point light are red while idle and green when pressed. The first Level 1 setup is latched, so the button and door remain active after the player steps on it.
+- `Assets/Game/Scene/Level_1.unity` contains a manually placed `DoorButtonPuzzle` near the scene-local `TopDownPlayer` start position for quick testing.
+
+## Current interaction/resource implementation on 2026-06-10
+
+- `Assets/Game/Scripts/Player/PlayerResourceController.cs` stores player ammo and stamina. The current accepted defaults are starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `25/sec`, stamina regen `35/sec` after `0.45 sec`.
+- `TopDownFacingController` now spends `1` ammo before spawning a projectile. If ammo is `0`, ranged shooting does not fire; melee attacks still work.
+- `TopDownPlayerMotor` now has `2` dash charges and recovers one charge every `5 sec`. Sprinting consumes stamina through `PlayerResourceController`.
+- `Assets/Game/Scripts/UI/PlayerStatusUiRuntime.cs` creates a runtime bottom-right HUD showing ammo, two dash rectangles, and stamina.
+- `Assets/Game/Scripts/Interaction/WorldInteractable.cs` adds portal-style proximity interaction for non-portal objects, using the existing `ScenePortalInteractionController` and `PortalUiRuntime` prompt.
+- `Store` and `HAMMER` prefabs have root `SphereCollider` trigger interaction and show `Buy: press E` / `Bought` style prompt behavior configured with Russian prefab text.
+- `Chest` and `Capsule` prefabs have root `SphereCollider` trigger interaction. Chest grants `20` ammo, capsule grants `50` ammo, then disables its `MinimapTrackable` and trigger so it cannot be taken again.

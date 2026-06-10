@@ -26,21 +26,35 @@ namespace RorType.Gameplay.Interaction
 
             var activePortal = ResolveClosestPortal();
             UpdatePortalHighlights();
-            if (activePortal == null)
+            if (activePortal != null)
+            {
+                PortalUiRuntime.ShowPrompt(activePortal.GetInteractionPrompt());
+                if (!inputAdapter.InteractPressed)
+                {
+                    return;
+                }
+
+                inputAdapter.ConsumeInteractPressed();
+                activePortal.Interact();
+                return;
+            }
+
+            var activeInteractable = ResolveClosestInteractable();
+            if (activeInteractable == null)
             {
                 PortalUiRuntime.HidePrompt();
                 inputAdapter.ConsumeInteractPressed();
                 return;
             }
 
-            PortalUiRuntime.ShowPrompt(activePortal.GetInteractionPrompt());
+            PortalUiRuntime.ShowPrompt(activeInteractable.GetInteractionPrompt());
             if (!inputAdapter.InteractPressed)
             {
                 return;
             }
 
             inputAdapter.ConsumeInteractPressed();
-            activePortal.Interact();
+            activeInteractable.Interact(this);
         }
 
         private void UpdatePortalHighlights()
@@ -92,6 +106,38 @@ namespace RorType.Gameplay.Interaction
             }
 
             return closestPortal;
+        }
+
+        private WorldInteractable ResolveClosestInteractable()
+        {
+            var interactables = WorldInteractable.ActiveInteractables;
+            WorldInteractable closestInteractable = null;
+            var closestDistance = float.MaxValue;
+
+            for (var index = 0; index < interactables.Count; index++)
+            {
+                var interactable = interactables[index];
+                if (interactable == null || !interactable.IsAvailable)
+                {
+                    continue;
+                }
+
+                if (!interactable.IsTouchedBy(this))
+                {
+                    continue;
+                }
+
+                var sqrDistance = interactable.GetSqrDistanceTo(transform.position);
+                if (sqrDistance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = sqrDistance;
+                closestInteractable = interactable;
+            }
+
+            return closestInteractable;
         }
     }
 }

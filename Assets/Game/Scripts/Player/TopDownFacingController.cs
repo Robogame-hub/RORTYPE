@@ -7,6 +7,7 @@ namespace RorType.Gameplay.Player
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(TopDownPlayerMotor))]
     [RequireComponent(typeof(TopDownInputAdapter))]
+    [RequireComponent(typeof(PlayerResourceController))]
     public sealed class TopDownFacingController : MonoBehaviour
     {
         [Header("References")]
@@ -60,6 +61,7 @@ namespace RorType.Gameplay.Player
         private TopDownPlayerMotor motor;
         private Rigidbody body;
         private TopDownInputAdapter inputAdapter;
+        private PlayerResourceController resources;
         private CapsuleCollider capsuleCollider;
         private float shotCooldownTimer;
         private bool shotQueued;
@@ -81,6 +83,7 @@ namespace RorType.Gameplay.Player
             motor = GetComponent<TopDownPlayerMotor>();
             body = GetComponent<Rigidbody>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
+            resources = GetComponent<PlayerResourceController>();
             capsuleCollider = GetComponent<CapsuleCollider>();
             visualRoot = ResolveVisualRoot();
             CacheFeedbackBasePose();
@@ -206,6 +209,16 @@ namespace RorType.Gameplay.Player
             }
 
             shotQueued = false;
+            if (resources == null)
+            {
+                resources = GetComponent<PlayerResourceController>();
+            }
+
+            if (resources != null && !resources.TryConsumeAmmo(1))
+            {
+                return;
+            }
+
             shotCooldownTimer = shotInterval;
             SpawnProjectile();
         }
