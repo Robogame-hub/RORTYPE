@@ -8,6 +8,7 @@ namespace RorType.Gameplay.Player
         [SerializeField] private string verticalAxis = "Vertical";
         [SerializeField] private KeyCode sprintKey = KeyCode.LeftShift;
         [SerializeField] private KeyCode respawnKey = KeyCode.R;
+        [SerializeField] private KeyCode interactKey = KeyCode.E;
         [SerializeField] private KeyCode jumpKey = KeyCode.Space;
         [SerializeField] private KeyCode dashKey = KeyCode.LeftControl;
         [SerializeField] private KeyCode moveLeftKey = KeyCode.A;
@@ -20,6 +21,7 @@ namespace RorType.Gameplay.Player
         public Vector2 MoveInput { get; private set; }
         public bool SprintHeld { get; private set; }
         public bool RespawnPressed { get; private set; }
+        public bool InteractPressed { get; private set; }
         public bool JumpPressed { get; private set; }
         public bool DashPressed { get; private set; }
         public bool FireHeld { get; private set; }
@@ -43,6 +45,7 @@ namespace RorType.Gameplay.Player
             MoveInput = Vector2.ClampMagnitude(rawInput, 1f);
             SprintHeld = Input.GetKey(sprintKey);
             RespawnPressed = Input.GetKeyDown(respawnKey);
+            InteractPressed = Input.GetKeyDown(ResolveInteractKey());
             JumpPressed = Input.GetKeyDown(jumpKey);
             DashPressed = Input.GetKeyDown(dashKey);
             FireHeld = Input.GetMouseButton(fireMouseButton);
@@ -63,6 +66,12 @@ namespace RorType.Gameplay.Player
         public void ConsumeFrameActions()
         {
             RespawnPressed = false;
+            InteractPressed = false;
+        }
+
+        public void ConsumeInteractPressed()
+        {
+            InteractPressed = false;
         }
 
         public void ConsumeJumpPressed()
@@ -110,6 +119,11 @@ namespace RorType.Gameplay.Player
             }
 
             return new Vector2(horizontal, vertical);
+        }
+
+        private KeyCode ResolveInteractKey()
+        {
+            return interactKey == KeyCode.None ? KeyCode.E : interactKey;
         }
     }
 }

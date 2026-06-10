@@ -282,8 +282,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
   trackedTransform: {fileID: 6129881576321447917}
   iconGroup: 1
-  presentation: 0
-  iconSprite: {fileID: 327268124, guid: 6bd6cf3db7f49914aa9e279abbe4de21, type: 3}
-  iconColor: {r: 1, g: 0, b: 0, a: 1}
+  markerShape: 0
+  iconColor: {r: 0.95, g: 0.2, b: 0.2, a: 1}
+  markerSize: 14
   rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}

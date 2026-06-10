@@ -11,12 +11,13 @@ namespace RorType.Gameplay.UI
         private struct IconSlot
         {
             public RectTransform root;
-            public Image image;
+            public MinimapMarkerGraphic graphic;
         }
 
         [SerializeField] private RectTransform mapViewport;
         [SerializeField] private Image mapImage;
-        [SerializeField] private RectTransform playerArrow;
+        [SerializeField] private RectTransform playerMarker;
+        [SerializeField] private MinimapMarkerGraphic playerMarkerGraphic;
         [SerializeField] private Vector2 worldSizeMeters = new(500f, 500f);
         [SerializeField] private Vector2 worldCenter;
         [SerializeField] private float iconEdgePadding = 8f;
@@ -25,7 +26,7 @@ namespace RorType.Gameplay.UI
 
         private void LateUpdate()
         {
-            if (mapViewport == null)
+            if (mapViewport == null || mapImage == null)
             {
                 return;
             }
@@ -42,14 +43,9 @@ namespace RorType.Gameplay.UI
                     continue;
                 }
 
-                if (trackable.Presentation == MinimapIconPresentation.PlayerArrow)
+                if (trackable.IconGroup == MinimapIconGroup.Player)
                 {
                     playerTrackable ??= trackable;
-                    continue;
-                }
-
-                if (trackable.IconSprite == null)
-                {
                     continue;
                 }
 
@@ -67,41 +63,44 @@ namespace RorType.Gameplay.UI
                 SetSlotVisible(iconSlots[index], false);
             }
 
-            ApplyPlayerArrow(playerTrackable);
+            ApplyPlayerMarker(playerTrackable);
         }
 
-        private void ApplyPlayerArrow(MinimapTrackable playerTrackable)
+        private void ApplyPlayerMarker(MinimapTrackable playerTrackable)
         {
-            if (playerArrow == null)
+            if (playerMarker == null || playerMarkerGraphic == null)
             {
                 return;
             }
 
             if (playerTrackable == null)
             {
-                playerArrow.gameObject.SetActive(false);
+                playerMarker.gameObject.SetActive(false);
                 return;
             }
 
-            playerArrow.gameObject.SetActive(true);
-            playerArrow.anchoredPosition = GetAnchoredPosition(playerTrackable);
-            playerArrow.localRotation = Quaternion.Euler(0f, 0f, -GetYawDegrees(playerTrackable));
+            playerMarker.gameObject.SetActive(true);
+            playerMarker.sizeDelta = Vector2.one * playerTrackable.MarkerSize;
+            playerMarker.anchoredPosition = GetAnchoredPosition(playerTrackable);
+            playerMarker.localRotation = playerTrackable.RotateWithWorldYaw
+                ? Quaternion.Euler(0f, 0f, -GetYawDegrees(playerTrackable))
+                : Quaternion.identity;
+            playerMarkerGraphic.SetAppearance(playerTrackable.MarkerShape, playerTrackable.IconColor);
         }
 
         private void ApplyIconSlot(IconSlot slot, MinimapTrackable trackable)
         {
-            if (slot.root == null || slot.image == null)
+            if (slot.root == null || slot.graphic == null)
             {
                 return;
             }
 
+            slot.root.sizeDelta = Vector2.one * trackable.MarkerSize;
             slot.root.anchoredPosition = GetAnchoredPosition(trackable);
             slot.root.localRotation = trackable.RotateWithWorldYaw
                 ? Quaternion.Euler(0f, 0f, -GetYawDegrees(trackable))
                 : Quaternion.identity;
-            slot.image.sprite = trackable.IconSprite;
-            slot.image.color = trackable.IconColor;
-            slot.image.preserveAspect = true;
+            slot.graphic.SetAppearance(trackable.MarkerShape, trackable.IconColor);
             SetSlotVisible(slot, true);
         }
 

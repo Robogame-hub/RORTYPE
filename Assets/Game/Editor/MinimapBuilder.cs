@@ -26,6 +26,7 @@ namespace RorType.Gameplay.Editor
         private static readonly Color PlayerColor = new(0.15f, 0.9f, 0.25f, 1f);
         private static readonly Color EnemyColor = new(0.95f, 0.2f, 0.2f, 1f);
         private static readonly Color PointOfInterestColor = new(0.2f, 0.55f, 1f, 1f);
+        private static readonly Color LootColor = new(0.2f, 0.55f, 1f, 1f);
 
         [MenuItem("RORTYPE/Build Minimap")]
         public static void BuildMinimap()
@@ -65,7 +66,7 @@ namespace RorType.Gameplay.Editor
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
-            var panel = CreateUiObject("MinimapPanel", root.transform, new Vector2(220f, 220f));
+            var panel = CreateUiObject("MinimapPanel", root.transform, new Vector2(500f, 500f));
             var panelRect = panel.GetComponent<RectTransform>();
             panelRect.anchorMin = new Vector2(1f, 1f);
             panelRect.anchorMax = new Vector2(1f, 1f);
@@ -75,10 +76,10 @@ namespace RorType.Gameplay.Editor
             var panelImage = panel.AddComponent<Image>();
             panelImage.sprite = GetDefaultUiSprite();
             panelImage.type = Image.Type.Sliced;
-            panelImage.color = new Color(0.05f, 0.08f, 0.12f, 0.88f);
+            panelImage.color = new Color(0.05f, 0.08f, 0.12f, 0.75f);
             panelImage.raycastTarget = false;
 
-            var viewport = CreateUiObject("MapViewport", panel.transform, new Vector2(192f, 192f));
+            var viewport = CreateUiObject("MapViewport", panel.transform, new Vector2(452f, 452f));
             var viewportRect = viewport.GetComponent<RectTransform>();
             viewportRect.anchorMin = new Vector2(0.5f, 0.5f);
             viewportRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -88,7 +89,7 @@ namespace RorType.Gameplay.Editor
             var viewportImage = viewport.AddComponent<Image>();
             viewportImage.sprite = GetDefaultUiSprite();
             viewportImage.type = Image.Type.Sliced;
-            viewportImage.color = new Color(0f, 0f, 0f, 0.28f);
+            viewportImage.color = new Color(0f, 0f, 0f, 0.2f);
             viewportImage.raycastTarget = false;
             viewport.AddComponent<RectMask2D>();
 
@@ -101,28 +102,29 @@ namespace RorType.Gameplay.Editor
 
             var mapImage = mapImageObject.AddComponent<Image>();
             mapImage.sprite = levelMapSprite;
-            mapImage.color = Color.white;
+            mapImage.color = new Color(1f, 1f, 1f, 0.75f);
             mapImage.preserveAspect = true;
             mapImage.raycastTarget = false;
 
-            var iconsRoot = CreateUiObject("Icons", viewport.transform, viewportRect.sizeDelta);
+            var iconsRoot = CreateUiObject("Markers", viewport.transform, viewportRect.sizeDelta);
             var iconsRootRect = iconsRoot.GetComponent<RectTransform>();
             iconsRootRect.anchorMin = new Vector2(0.5f, 0.5f);
             iconsRootRect.anchorMax = new Vector2(0.5f, 0.5f);
             iconsRootRect.pivot = new Vector2(0.5f, 0.5f);
             iconsRootRect.anchoredPosition = Vector2.zero;
 
-            var playerArrow = CreatePlayerArrow(iconsRoot.transform);
+            var playerMarker = CreateMarker("PlayerMarker", iconsRoot.transform, 18f, MinimapMarkerShape.Arrow, PlayerColor);
             var iconSlots = CreateIconSlots(iconsRoot.transform, 96);
 
             var controller = panel.AddComponent<MinimapController>();
             var serializedController = new SerializedObject(controller);
             serializedController.FindProperty("mapViewport").objectReferenceValue = viewportRect;
             serializedController.FindProperty("mapImage").objectReferenceValue = mapImage;
-            serializedController.FindProperty("playerArrow").objectReferenceValue = playerArrow;
+            serializedController.FindProperty("playerMarker").objectReferenceValue = playerMarker;
+            serializedController.FindProperty("playerMarkerGraphic").objectReferenceValue = playerMarker.GetComponent<MinimapMarkerGraphic>();
             serializedController.FindProperty("worldSizeMeters").vector2Value = new Vector2(500f, 500f);
             serializedController.FindProperty("worldCenter").vector2Value = Vector2.zero;
-            serializedController.FindProperty("iconEdgePadding").floatValue = 8f;
+            serializedController.FindProperty("iconEdgePadding").floatValue = 10f;
             serializedController.FindProperty("clampIconsToMapBounds").boolValue = true;
 
             var iconSlotsProperty = serializedController.FindProperty("iconSlots");
@@ -131,7 +133,7 @@ namespace RorType.Gameplay.Editor
             {
                 var slotProperty = iconSlotsProperty.GetArrayElementAtIndex(index);
                 slotProperty.FindPropertyRelative("root").objectReferenceValue = iconSlots[index].root;
-                slotProperty.FindPropertyRelative("image").objectReferenceValue = iconSlots[index].image;
+                slotProperty.FindPropertyRelative("graphic").objectReferenceValue = iconSlots[index].graphic;
             }
 
             serializedController.ApplyModifiedPropertiesWithoutUndo();
@@ -143,23 +145,23 @@ namespace RorType.Gameplay.Editor
 
         private static void ConfigureTrackablePrefabs()
         {
-            ConfigureTrackablePrefab(TopDownPlayerPrefabPath, MinimapIconGroup.Player, MinimapIconPresentation.PlayerArrow, null, PlayerColor, true);
-            ConfigureTrackablePrefab(HammerPrefabPath, MinimapIconGroup.PointOfInterest, MinimapIconPresentation.Sprite, null, PointOfInterestColor, false);
-            ConfigureTrackablePrefab(StorePrefabPath, MinimapIconGroup.PointOfInterest, MinimapIconPresentation.Sprite, null, PointOfInterestColor, false);
-            ConfigureTrackablePrefab(CapsulePrefabPath, MinimapIconGroup.PointOfInterest, MinimapIconPresentation.Sprite, null, PointOfInterestColor, false);
-            ConfigureTrackablePrefab(PortalPrefabPath, MinimapIconGroup.PointOfInterest, MinimapIconPresentation.Sprite, null, PointOfInterestColor, false);
-            ConfigureTrackablePrefab(ChestPrefabPath, MinimapIconGroup.PointOfInterest, MinimapIconPresentation.Sprite, null, PointOfInterestColor, false);
-            ConfigureTrackablePrefab(EnemyShooterPrefabPath, MinimapIconGroup.Enemy, MinimapIconPresentation.Sprite, null, EnemyColor, false);
-            ConfigureTrackablePrefab(EnemyMeleePrefabPath, MinimapIconGroup.Enemy, MinimapIconPresentation.Sprite, null, EnemyColor, false);
-            ConfigureTrackablePrefab(EnemyExploderPrefabPath, MinimapIconGroup.Enemy, MinimapIconPresentation.Sprite, null, EnemyColor, false);
+            ConfigureTrackablePrefab(TopDownPlayerPrefabPath, MinimapIconGroup.Player, MinimapMarkerShape.Arrow, PlayerColor, 20f, true);
+            ConfigureTrackablePrefab(HammerPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 16f, false);
+            ConfigureTrackablePrefab(StorePrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 16f, false);
+            ConfigureTrackablePrefab(CapsulePrefabPath, MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false);
+            ConfigureTrackablePrefab(PortalPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 16f, false);
+            ConfigureTrackablePrefab(ChestPrefabPath, MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false);
+            ConfigureTrackablePrefab(EnemyShooterPrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
+            ConfigureTrackablePrefab(EnemyMeleePrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
+            ConfigureTrackablePrefab(EnemyExploderPrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
         }
 
         private static void ConfigureTrackablePrefab(
             string prefabPath,
             MinimapIconGroup iconGroup,
-            MinimapIconPresentation presentation,
-            Sprite iconSprite,
+            MinimapMarkerShape markerShape,
             Color iconColor,
+            float markerSize,
             bool rotateWithWorldYaw)
         {
             var prefabRoot = PrefabUtility.LoadPrefabContents(prefabPath);
@@ -169,15 +171,7 @@ namespace RorType.Gameplay.Editor
                 trackable = prefabRoot.AddComponent<MinimapTrackable>();
             }
 
-            var serializedTrackable = new SerializedObject(trackable);
-            serializedTrackable.FindProperty("trackedTransform").objectReferenceValue = prefabRoot.transform;
-            serializedTrackable.FindProperty("iconGroup").enumValueIndex = (int)iconGroup;
-            serializedTrackable.FindProperty("presentation").enumValueIndex = (int)presentation;
-            serializedTrackable.FindProperty("iconSprite").objectReferenceValue = iconSprite;
-            serializedTrackable.FindProperty("iconColor").colorValue = iconColor;
-            serializedTrackable.FindProperty("rotateWithWorldYaw").boolValue = rotateWithWorldYaw;
-            serializedTrackable.FindProperty("worldOffset").vector3Value = Vector3.zero;
-            serializedTrackable.ApplyModifiedPropertiesWithoutUndo();
+            ConfigureTrackableSerialized(new SerializedObject(trackable), prefabRoot.transform, iconGroup, markerShape, iconColor, markerSize, rotateWithWorldYaw);
             EditorUtility.SetDirty(trackable);
 
             PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath);
@@ -200,33 +194,172 @@ namespace RorType.Gameplay.Editor
                 canvasInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
                 canvasInstance.name = "MinimapCanvas";
             }
+            else if (PrefabUtility.IsPartOfPrefabInstance(existingCanvas))
+            {
+                PrefabUtility.RevertPrefabInstance(existingCanvas, InteractionMode.AutomatedAction);
+                canvasInstance = existingCanvas;
+            }
             else
             {
-                if (PrefabUtility.IsPartOfPrefabInstance(existingCanvas))
-                {
-                    PrefabUtility.RevertPrefabInstance(existingCanvas, InteractionMode.AutomatedAction);
-                    canvasInstance = existingCanvas;
-                }
-                else
-                {
-                    Object.DestroyImmediate(existingCanvas);
-                    canvasInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
-                    canvasInstance.name = "MinimapCanvas";
-                }
+                Object.DestroyImmediate(existingCanvas);
+                canvasInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, scene);
+                canvasInstance.name = "MinimapCanvas";
             }
+
+            EnsureSceneTrackables(scene);
 
             var controller = canvasInstance.GetComponentInChildren<MinimapController>(true);
             if (controller != null)
             {
                 var serializedController = new SerializedObject(controller);
-                serializedController.FindProperty("worldSizeMeters").vector2Value = new Vector2(500f, 500f);
-                serializedController.FindProperty("worldCenter").vector2Value = Vector2.zero;
+                var bounds = CalculateSceneTrackableBounds(scene);
+                serializedController.FindProperty("worldSizeMeters").vector2Value = bounds.size;
+                serializedController.FindProperty("worldCenter").vector2Value = bounds.center;
                 serializedController.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(controller);
             }
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
+        }
+
+        private static Bounds2D CalculateSceneTrackableBounds(Scene scene)
+        {
+            var hasAny = false;
+            var min = Vector2.zero;
+            var max = Vector2.zero;
+
+            foreach (var trackable in EnumerateSceneTrackables(scene))
+            {
+                if (trackable == null)
+                {
+                    continue;
+                }
+
+                var position = trackable.TrackedTransform.position + trackable.WorldOffset;
+                var point = new Vector2(position.x, position.z);
+                if (!hasAny)
+                {
+                    min = point;
+                    max = point;
+                    hasAny = true;
+                    continue;
+                }
+
+                min = Vector2.Min(min, point);
+                max = Vector2.Max(max, point);
+            }
+
+            if (!hasAny)
+            {
+                return new Bounds2D(Vector2.zero, new Vector2(500f, 500f));
+            }
+
+            var size = max - min;
+            size.x = Mathf.Max(500f, size.x + 40f);
+            size.y = Mathf.Max(500f, size.y + 40f);
+            return new Bounds2D((min + max) * 0.5f, size);
+        }
+
+        private static void EnsureSceneTrackables(Scene scene)
+        {
+            EnsureSceneTrackable(scene, "TopDownPlayer", MinimapIconGroup.Player, MinimapMarkerShape.Arrow, PlayerColor, 20f, true, false);
+            EnsureSceneTrackable(scene, "HAMMER", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 16f, false, true);
+            EnsureSceneTrackable(scene, "Store", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 16f, false, false);
+            EnsureSceneTrackable(scene, "Portal", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 16f, false, false);
+            EnsureSceneTrackable(scene, "Chest", MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false, true);
+            EnsureSceneTrackable(scene, "Capsule", MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false, true);
+        }
+
+        private static void EnsureSceneTrackable(
+            Scene scene,
+            string nameToken,
+            MinimapIconGroup iconGroup,
+            MinimapMarkerShape markerShape,
+            Color iconColor,
+            float markerSize,
+            bool rotateWithWorldYaw,
+            bool prefixMatch)
+        {
+            foreach (var gameObject in EnumerateSceneObjects(scene))
+            {
+                if (!NameMatches(gameObject.name, nameToken, prefixMatch))
+                {
+                    continue;
+                }
+
+                var trackable = gameObject.GetComponent<MinimapTrackable>();
+                if (trackable == null)
+                {
+                    trackable = gameObject.AddComponent<MinimapTrackable>();
+                }
+
+                ConfigureTrackableSerialized(new SerializedObject(trackable), gameObject.transform, iconGroup, markerShape, iconColor, markerSize, rotateWithWorldYaw);
+                EditorUtility.SetDirty(trackable);
+            }
+        }
+
+        private static void ConfigureTrackableSerialized(
+            SerializedObject serializedTrackable,
+            Transform trackedTransform,
+            MinimapIconGroup iconGroup,
+            MinimapMarkerShape markerShape,
+            Color iconColor,
+            float markerSize,
+            bool rotateWithWorldYaw)
+        {
+            serializedTrackable.FindProperty("trackedTransform").objectReferenceValue = trackedTransform;
+            serializedTrackable.FindProperty("iconGroup").enumValueIndex = (int)iconGroup;
+            serializedTrackable.FindProperty("markerShape").enumValueIndex = (int)markerShape;
+            serializedTrackable.FindProperty("iconColor").colorValue = iconColor;
+            serializedTrackable.FindProperty("markerSize").floatValue = markerSize;
+            serializedTrackable.FindProperty("rotateWithWorldYaw").boolValue = rotateWithWorldYaw;
+            serializedTrackable.FindProperty("worldOffset").vector3Value = Vector3.zero;
+            serializedTrackable.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static IEnumerable<MinimapTrackable> EnumerateSceneTrackables(Scene scene)
+        {
+            foreach (var gameObject in EnumerateSceneObjects(scene))
+            {
+                var trackable = gameObject.GetComponent<MinimapTrackable>();
+                if (trackable != null)
+                {
+                    yield return trackable;
+                }
+            }
+        }
+
+        private static IEnumerable<GameObject> EnumerateSceneObjects(Scene scene)
+        {
+            var roots = scene.GetRootGameObjects();
+            for (var index = 0; index < roots.Length; index++)
+            {
+                foreach (var gameObject in EnumerateGameObjectRecursive(roots[index].transform))
+                {
+                    yield return gameObject;
+                }
+            }
+        }
+
+        private static IEnumerable<GameObject> EnumerateGameObjectRecursive(Transform root)
+        {
+            yield return root.gameObject;
+
+            for (var index = 0; index < root.childCount; index++)
+            {
+                foreach (var child in EnumerateGameObjectRecursive(root.GetChild(index)))
+                {
+                    yield return child;
+                }
+            }
+        }
+
+        private static bool NameMatches(string candidate, string nameToken, bool prefixMatch)
+        {
+            return prefixMatch
+                ? candidate == nameToken || candidate.StartsWith($"{nameToken} (", System.StringComparison.Ordinal)
+                : candidate == nameToken;
         }
 
         private static Sprite EnsureSingleSprite(string assetPath)
@@ -289,41 +422,26 @@ namespace RorType.Gameplay.Editor
             return gameObject;
         }
 
-        private static RectTransform CreatePlayerArrow(Transform parent)
+        private static RectTransform CreateMarker(string name, Transform parent, float size, MinimapMarkerShape shape, Color color)
         {
-            var root = CreateUiObject("PlayerArrow", parent, new Vector2(18f, 18f)).GetComponent<RectTransform>();
-
-            var body = CreateUiObject("Body", root, new Vector2(6f, 12f)).GetComponent<RectTransform>();
-            body.anchoredPosition = new Vector2(0f, -2f);
-            var bodyImage = body.gameObject.AddComponent<Image>();
-            bodyImage.sprite = GetDefaultUiSprite();
-            bodyImage.color = PlayerColor;
-            bodyImage.type = Image.Type.Sliced;
-            bodyImage.raycastTarget = false;
-
-            var head = CreateUiObject("Head", root, new Vector2(10f, 10f)).GetComponent<RectTransform>();
-            head.anchoredPosition = new Vector2(0f, 4f);
-            head.localRotation = Quaternion.Euler(0f, 0f, 45f);
-            var headImage = head.gameObject.AddComponent<Image>();
-            headImage.sprite = GetDefaultUiSprite();
-            headImage.color = PlayerColor;
-            headImage.type = Image.Type.Sliced;
-            headImage.raycastTarget = false;
-
-            return root;
+            var marker = CreateUiObject(name, parent, new Vector2(size, size));
+            var graphic = marker.AddComponent<MinimapMarkerGraphic>();
+            graphic.raycastTarget = false;
+            graphic.SetAppearance(shape, color);
+            return marker.GetComponent<RectTransform>();
         }
 
-        private static List<(RectTransform root, Image image)> CreateIconSlots(Transform parent, int count)
+        private static List<(RectTransform root, MinimapMarkerGraphic graphic)> CreateIconSlots(Transform parent, int count)
         {
-            var slots = new List<(RectTransform root, Image image)>(count);
+            var slots = new List<(RectTransform root, MinimapMarkerGraphic graphic)>(count);
             for (var index = 0; index < count; index++)
             {
-                var root = CreateUiObject($"IconSlot_{index:00}", parent, new Vector2(14f, 14f)).GetComponent<RectTransform>();
-                var image = root.gameObject.AddComponent<Image>();
-                image.color = Color.white;
-                image.raycastTarget = false;
+                var root = CreateUiObject($"MarkerSlot_{index:00}", parent, new Vector2(14f, 14f)).GetComponent<RectTransform>();
+                var graphic = root.gameObject.AddComponent<MinimapMarkerGraphic>();
+                graphic.raycastTarget = false;
+                graphic.SetAppearance(MinimapMarkerShape.Square, Color.white);
                 root.gameObject.SetActive(false);
-                slots.Add((root, image));
+                slots.Add((root, graphic));
             }
 
             return slots;
@@ -348,6 +466,18 @@ namespace RorType.Gameplay.Editor
             {
                 AssetDatabase.CreateFolder(parentPath, folderName);
             }
+        }
+
+        private readonly struct Bounds2D
+        {
+            public Bounds2D(Vector2 center, Vector2 size)
+            {
+                this.center = center;
+                this.size = size;
+            }
+
+            public Vector2 center { get; }
+            public Vector2 size { get; }
         }
     }
 }

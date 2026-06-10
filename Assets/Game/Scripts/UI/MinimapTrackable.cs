@@ -7,13 +7,17 @@ namespace RorType.Gameplay.UI
     {
         Player = 0,
         Enemy = 1,
-        PointOfInterest = 2
+        PointOfInterest = 2,
+        Loot = 3
     }
 
-    public enum MinimapIconPresentation
+    public enum MinimapMarkerShape
     {
-        Sprite = 0,
-        PlayerArrow = 1
+        Cross = 0,
+        Square = 1,
+        Triangle = 2,
+        Circle = 3,
+        Arrow = 4
     }
 
     [DisallowMultipleComponent]
@@ -23,9 +27,9 @@ namespace RorType.Gameplay.UI
 
         [SerializeField] private Transform trackedTransform;
         [SerializeField] private MinimapIconGroup iconGroup = MinimapIconGroup.PointOfInterest;
-        [SerializeField] private MinimapIconPresentation presentation = MinimapIconPresentation.Sprite;
-        [SerializeField] private Sprite iconSprite;
+        [SerializeField] private MinimapMarkerShape markerShape = MinimapMarkerShape.Square;
         [SerializeField] private Color iconColor = Color.blue;
+        [SerializeField, Min(4f)] private float markerSize = 14f;
         [SerializeField] private bool rotateWithWorldYaw;
         [SerializeField] private Vector3 worldOffset;
 
@@ -33,9 +37,9 @@ namespace RorType.Gameplay.UI
 
         public Transform TrackedTransform => trackedTransform != null ? trackedTransform : transform;
         public MinimapIconGroup IconGroup => iconGroup;
-        public MinimapIconPresentation Presentation => presentation;
-        public Sprite IconSprite => iconSprite;
+        public MinimapMarkerShape MarkerShape => markerShape;
         public Color IconColor => iconColor;
+        public float MarkerSize => Mathf.Max(4f, markerSize);
         public bool RotateWithWorldYaw => rotateWithWorldYaw;
         public Vector3 WorldOffset => worldOffset;
 
@@ -50,6 +54,8 @@ namespace RorType.Gameplay.UI
             {
                 trackedTransform = transform;
             }
+
+            markerSize = Mathf.Max(4f, markerSize);
         }
 
         private void OnEnable()

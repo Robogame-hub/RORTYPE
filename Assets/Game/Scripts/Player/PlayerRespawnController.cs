@@ -72,6 +72,12 @@ namespace RorType.Gameplay.Player
             }
         }
 
+        public void SetSafePoint(Vector3 position, Quaternion rotation)
+        {
+            safePosition = position;
+            safeRotation = rotation;
+        }
+
         private void RefreshSafePoint()
         {
             if (!groundProbe.IsStableGround)
