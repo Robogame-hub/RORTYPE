@@ -470,3 +470,8 @@
 - Standard pickup prefabs are `GoldPickup`, `AmmoCubePickup`, `AmmoSpherePickup`, and `HealthPickup`; each owns its collectible nominal through `ResourcePickupCollectible.amount`.
 - Accepted default nominal per picked item is: gold `10`, ammo cube/sphere `10`, health `150`.
 - Enemy drops and chest/capsule drops use these prefab-backed pickups by default, while older missing-prefab setups retain a runtime primitive fallback.
+
+## 2026-06-13 balance document note
+
+- `docs/balance.md` is now the compact working balance document for collectible nominal values, enemy balance, player stats, shops, spawn zones, and relevant environment values.
+- When balance values in older documentation conflict with `docs/balance.md`, prefer current prefab/script files first, then `docs/balance.md` as the human-readable summary.

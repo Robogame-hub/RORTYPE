@@ -66,17 +66,17 @@ namespace RorType.Gameplay.Interaction
             {
                 var pickupInstance = Instantiate(prefab.gameObject, position, Quaternion.identity);
                 pickupInstance.name = prefab.gameObject.name;
-                var collectible = pickupInstance.GetComponent<ResourcePickupCollectible>();
-                if (collectible == null)
+                var prefabCollectible = pickupInstance.GetComponent<ResourcePickupCollectible>();
+                if (prefabCollectible == null)
                 {
-                    collectible = pickupInstance.AddComponent<ResourcePickupCollectible>();
-                    collectible.kind = pickupKind;
-                    collectible.amount = Mathf.Max(1, fallbackAmount);
+                    prefabCollectible = pickupInstance.AddComponent<ResourcePickupCollectible>();
+                    prefabCollectible.kind = pickupKind;
+                    prefabCollectible.amount = Mathf.Max(1, fallbackAmount);
                 }
 
-                collectible.PrepareSpawnedInstance(launchVelocity);
+                prefabCollectible.PrepareSpawnedInstance(launchVelocity);
                 CombatRuntimeBudget.Register(pickupInstance, CombatRuntimeObjectKind.ResourcePickup);
-                return collectible;
+                return prefabCollectible;
             }
 
             var pickup = pickupKind == PickupKind.Health
