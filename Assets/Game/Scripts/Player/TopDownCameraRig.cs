@@ -15,11 +15,13 @@ namespace RorType.Gameplay.Player
         private Vector3 smoothedTargetPosition;
         private Vector3 smoothedLookAheadOffset;
         private Vector3 smoothedLookAheadVelocity;
+        private TopDownPlayerMotor targetMotor;
         private bool hasSmoothedTargetPosition;
 
         public void SetTarget(Transform newTarget)
         {
             target = newTarget;
+            targetMotor = target != null ? target.GetComponent<TopDownPlayerMotor>() : null;
             hasSmoothedTargetPosition = false;
             smoothedLookAheadOffset = Vector3.zero;
             smoothedLookAheadVelocity = Vector3.zero;
@@ -32,20 +34,21 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
+            var targetPosition = GetTargetPosition();
             var blend = 1f - Mathf.Exp(-followSharpness * Time.deltaTime);
             if (!hasSmoothedTargetPosition)
             {
-                smoothedTargetPosition = target.position;
-                smoothedLookAheadOffset = ResolveCursorLookAhead();
+                smoothedTargetPosition = targetPosition;
+                smoothedLookAheadOffset = ResolveCursorLookAhead(targetPosition);
                 smoothedLookAheadVelocity = Vector3.zero;
                 hasSmoothedTargetPosition = true;
             }
             else
             {
-                smoothedTargetPosition = Vector3.Lerp(smoothedTargetPosition, target.position, blend);
+                smoothedTargetPosition = Vector3.Lerp(smoothedTargetPosition, targetPosition, blend);
             }
 
-            var desiredLookAhead = ResolveCursorLookAhead();
+            var desiredLookAhead = ResolveCursorLookAhead(targetPosition);
             var lookAheadMaxSpeed = Mathf.Max(1f, cursorLookAheadDistance * Mathf.Max(1f, cursorLookAheadSharpness));
             smoothedLookAheadOffset = Vector3.SmoothDamp(
                 smoothedLookAheadOffset,
@@ -60,7 +63,17 @@ namespace RorType.Gameplay.Player
             transform.rotation = Quaternion.LookRotation((framedTargetPosition + lookOffset) - transform.position, Vector3.up);
         }
 
-        private Vector3 ResolveCursorLookAhead()
+        private Vector3 GetTargetPosition()
+        {
+            if (targetMotor == null && target != null)
+            {
+                targetMotor = target.GetComponent<TopDownPlayerMotor>();
+            }
+
+            return targetMotor != null ? targetMotor.RenderPosition : target.position;
+        }
+
+        private Vector3 ResolveCursorLookAhead(Vector3 targetPosition)
         {
             if (target == null || cursorLookAheadDistance <= 0f)
             {
@@ -73,7 +86,7 @@ namespace RorType.Gameplay.Player
                 return Vector3.zero;
             }
 
-            var lookAheadOffset = aimPoint - target.position;
+            var lookAheadOffset = aimPoint - targetPosition;
             lookAheadOffset.y = 0f;
             if (lookAheadOffset.sqrMagnitude <= 0.0001f)
             {

@@ -1,5 +1,6 @@
 using System.Collections;
 using RorType.Gameplay.Combat;
+using RorType.Gameplay.Interaction;
 using RorType.Gameplay.Player;
 using UnityEngine;
 using UnityEngine.AI;
@@ -20,7 +21,7 @@ namespace RorType.Gameplay.AI
         private const float DestinationUpdateThreshold = 0.2f;
         private const float DefaultExplosionEffectRadius = 3f;
         private const float DefaultExplosionDamageRadius = 2f;
-        private const float DefaultExplosionDamage = 3f;
+        private const float DefaultExplosionDamage = 30f;
         private const int ExplosionHitBufferSize = 16;
 
         [Header("Identity")]
@@ -58,12 +59,14 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0.01f)] private float shooterProjectileRadius = 0.18f;
         [SerializeField, Min(0f)] private float shooterProjectileForwardOffset = 0.95f;
         [SerializeField, Min(0f)] private float shooterKnockbackForce = 2.6f;
+        [SerializeField, Min(0f)] private float shooterProjectileDamage = 20f;
         [SerializeField] private Color shooterProjectileColor = new Color(1f, 0.86f, 0.18f);
 
         [Header("Melee")]
         [SerializeField, Min(0.1f)] private float meleeAttackRange = 1.65f;
         [SerializeField, Min(0.01f)] private float meleeInterval = 0.5f;
         [SerializeField, Min(0f)] private float meleeKnockbackForce = 3.15f;
+        [SerializeField, Min(0f)] private float meleeDamage = 10f;
         [SerializeField, Min(0.01f)] private float meleePunchDuration = 0.18f;
         [SerializeField, Min(0f)] private float meleeForwardReach = 0.7f;
         [SerializeField, Min(0f)] private float meleeSideOffset = 0.38f;
@@ -95,6 +98,16 @@ namespace RorType.Gameplay.AI
         [SerializeField] private Color hitFlashColor = Color.white;
         [SerializeField, Min(1)] private int hitFlashCount = 3;
         [SerializeField, Min(0.01f)] private float hitFlashInterval = 0.05f;
+
+        [Header("Drops")]
+        [SerializeField, Min(0)] private int minResourceDrops = 1;
+        [SerializeField, Min(0)] private int maxResourceDrops = 3;
+        [SerializeField, Min(1)] private int moneyPerPickup = 2;
+        [SerializeField, Min(1)] private int ammoPerPickup = 1;
+        [SerializeField, Min(1)] private int healthPerPickup = 20;
+        [SerializeField, Range(0f, 1f)] private float healthDropChance = 0.2f;
+        [SerializeField, Range(0f, 1f)] private float shooterAmmoDropChance = 0.45f;
+        [SerializeField, Min(0.1f)] private float dropLaunchSpeed = 3.2f;
 
         private Rigidbody body;
         private CapsuleCollider capsuleCollider;
@@ -128,6 +141,7 @@ namespace RorType.Gameplay.AI
         private Coroutine hitFlashRoutine;
         private Coroutine explosionRoutine;
         private Vector3 visualBaseLocalPosition;
+        private Vector3 smoothedVisualWorldPosition;
 
         public CombatTeam Team => CombatTeam.Enemy;
         public bool IsAlive => !isDead;
@@ -146,10 +160,7 @@ namespace RorType.Gameplay.AI
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
-            if (visualRoot == null)
-            {
-                visualRoot = transform;
-            }
+            visualRoot = ResolveVisualRoot();
 
             if (visualRenderer == null)
             {
@@ -217,6 +228,7 @@ namespace RorType.Gameplay.AI
                 ResolveTarget();
             }
 
+            TickMovement(Time.deltaTime);
             UpdateFeedbackVisual(Time.deltaTime);
             UpdateMeleeFistVisuals();
         }
@@ -226,7 +238,7 @@ namespace RorType.Gameplay.AI
             UpdateVisualSmoothing();
         }
 
-        private void FixedUpdate()
+        private void TickMovement(float deltaTime)
         {
             if (isDead)
             {
@@ -245,7 +257,7 @@ namespace RorType.Gameplay.AI
                 hasDetectedTarget = false;
                 hasScheduledShooterRadialVolley = false;
                 TickPatrol();
-                RotateVisual(GetPatrolFacingDirection());
+                RotateVisual(GetPatrolFacingDirection(), deltaTime);
                 return;
             }
 
@@ -259,7 +271,7 @@ namespace RorType.Gameplay.AI
             if (!hasDetectedTarget)
             {
                 TickPatrol();
-                RotateVisual(GetPatrolFacingDirection());
+                RotateVisual(GetPatrolFacingDirection(), deltaTime);
                 return;
             }
 
@@ -276,7 +288,7 @@ namespace RorType.Gameplay.AI
                     break;
             }
 
-            RotateVisual(directionToTarget);
+            RotateVisual(directionToTarget, deltaTime);
         }
 
         public void SetPatrolAnchor(Vector3 anchor)
@@ -382,6 +394,7 @@ namespace RorType.Gameplay.AI
                 attackCooldownTimer = meleeInterval;
                 TriggerMeleePunch(nextMeleeFistIndex);
                 nextMeleeFistIndex = (nextMeleeFistIndex + 1) % MeleeFistCount;
+                TryApplyPlayerDamage(directionToTarget, meleeDamage, meleeAttackRange + 0.55f);
                 TryApplyPlayerKnockback(directionToTarget, meleeKnockbackForce, meleeAttackRange + 0.55f);
             }
         }
@@ -500,6 +513,7 @@ namespace RorType.Gameplay.AI
                 0.74f,
                 10f,
                 shooterKnockbackForce,
+                shooterProjectileDamage,
                 transform.root);
         }
 
@@ -754,7 +768,7 @@ namespace RorType.Gameplay.AI
             return false;
         }
 
-        private void RotateVisual(Vector3 direction)
+        private void RotateVisual(Vector3 direction, float deltaTime)
         {
             if (visualRoot == null)
             {
@@ -771,7 +785,7 @@ namespace RorType.Gameplay.AI
             visualRoot.rotation = Quaternion.RotateTowards(
                 visualRoot.rotation,
                 targetRotation,
-                turnSpeedDegrees * Time.fixedDeltaTime);
+                turnSpeedDegrees * Mathf.Max(0f, deltaTime));
         }
 
         private Vector3 GetPatrolFacingDirection()
@@ -868,6 +882,7 @@ namespace RorType.Gameplay.AI
 
             isDead = true;
             StopNavigation();
+            SpawnResourceDrops();
 
             if (hitFlashRoutine != null)
             {
@@ -883,6 +898,64 @@ namespace RorType.Gameplay.AI
 
             isWarningExplosion = false;
             Destroy(gameObject);
+        }
+
+        private void SpawnResourceDrops()
+        {
+            var minDrops = Mathf.Max(0, minResourceDrops);
+            var maxDrops = Mathf.Max(minDrops, maxResourceDrops);
+            if (maxDrops <= 0)
+            {
+                return;
+            }
+
+            var dropCount = Random.Range(minDrops, maxDrops + 1);
+            var origin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position + Vector3.up;
+            for (var i = 0; i < dropCount; i++)
+            {
+                var canDropAmmo = archetype == EnemyCapsuleArchetype.Shooter;
+                var dropHealth = Random.value < healthDropChance;
+                var dropAmmo = !dropHealth && canDropAmmo && Random.value < shooterAmmoDropChance;
+                var pickupKind = ResolveDropKind(dropHealth, dropAmmo);
+                var amount = ResolveDropAmount(pickupKind);
+                var planarDirection = Random.insideUnitCircle.normalized;
+                if (planarDirection.sqrMagnitude <= 0.0001f)
+                {
+                    planarDirection = Vector2.right;
+                }
+
+                var launchVelocity = new Vector3(planarDirection.x, 1.6f, planarDirection.y) * dropLaunchSpeed;
+                ResourcePickupCollectible.Spawn(
+                    pickupKind,
+                    amount,
+                    origin + new Vector3(0f, 0.35f, 0f),
+                    launchVelocity);
+            }
+        }
+
+        private ResourcePickupCollectible.PickupKind ResolveDropKind(bool dropHealth, bool dropAmmo)
+        {
+            if (dropHealth)
+            {
+                return ResourcePickupCollectible.PickupKind.Health;
+            }
+
+            return dropAmmo
+                ? ResourcePickupCollectible.PickupKind.Ammo
+                : ResourcePickupCollectible.PickupKind.Money;
+        }
+
+        private int ResolveDropAmount(ResourcePickupCollectible.PickupKind pickupKind)
+        {
+            switch (pickupKind)
+            {
+                case ResourcePickupCollectible.PickupKind.Health:
+                    return healthPerPickup;
+                case ResourcePickupCollectible.PickupKind.Ammo:
+                    return ammoPerPickup;
+                default:
+                    return moneyPerPickup;
+            }
         }
 
         private void TriggerAttackBounce()
@@ -918,13 +991,15 @@ namespace RorType.Gameplay.AI
             var targetPosition = transform.TransformPoint(visualBaseLocalPosition);
             if (!hasVisualPosition)
             {
-                visualRoot.position = targetPosition;
+                smoothedVisualWorldPosition = targetPosition;
+                visualRoot.position = smoothedVisualWorldPosition;
                 hasVisualPosition = true;
                 return;
             }
 
             var blend = 1f - Mathf.Exp(-visualPositionSharpness * Time.deltaTime);
-            visualRoot.position = Vector3.Lerp(visualRoot.position, targetPosition, blend);
+            smoothedVisualWorldPosition = Vector3.Lerp(smoothedVisualWorldPosition, targetPosition, blend);
+            visualRoot.position = smoothedVisualWorldPosition;
         }
 
         private Vector3 EvaluateBounceScale(float progress)
@@ -988,6 +1063,47 @@ namespace RorType.Gameplay.AI
 
             visualBaseLocalPosition = transform.InverseTransformPoint(visualRoot.position);
             hasVisualBasePose = true;
+        }
+
+        private Transform ResolveVisualRoot()
+        {
+            if (visualRoot != null)
+            {
+                return visualRoot;
+            }
+
+            var childRenderer = GetComponentInChildren<Renderer>();
+            if (childRenderer != null && childRenderer.transform != transform)
+            {
+                return childRenderer.transform;
+            }
+
+            var rootRenderer = GetComponent<MeshRenderer>();
+            var rootMeshFilter = GetComponent<MeshFilter>();
+            if (rootRenderer != null && rootMeshFilter != null && rootMeshFilter.sharedMesh != null)
+            {
+                var runtimeVisual = transform.Find("RuntimeVisual");
+                if (runtimeVisual == null)
+                {
+                    var runtimeVisualObject = new GameObject("RuntimeVisual");
+                    runtimeVisualObject.transform.SetParent(transform, false);
+                    runtimeVisualObject.transform.localPosition = Vector3.zero;
+                    runtimeVisualObject.transform.localRotation = Quaternion.identity;
+                    runtimeVisualObject.transform.localScale = Vector3.one;
+
+                    var runtimeFilter = runtimeVisualObject.AddComponent<MeshFilter>();
+                    runtimeFilter.sharedMesh = rootMeshFilter.sharedMesh;
+
+                    var runtimeRenderer = runtimeVisualObject.AddComponent<MeshRenderer>();
+                    runtimeRenderer.sharedMaterials = rootRenderer.sharedMaterials;
+                    runtimeVisual = runtimeVisualObject.transform;
+                }
+
+                rootRenderer.enabled = false;
+                return runtimeVisual;
+            }
+
+            return transform;
         }
 
         private void IgnoreOwnCollisions(Collider projectileCollider)
@@ -1186,6 +1302,52 @@ namespace RorType.Gameplay.AI
             return true;
         }
 
+        private bool TryApplyPlayerDamage(Vector3 direction, float damageAmount, float maxDistance)
+        {
+            if (damageAmount <= 0f)
+            {
+                return false;
+            }
+
+            if (playerMotor == null)
+            {
+                ResolveTarget();
+                if (playerMotor == null)
+                {
+                    return false;
+                }
+            }
+
+            var playerResources = playerMotor.GetComponent<PlayerResourceController>();
+            if (playerResources == null || !playerResources.IsAlive)
+            {
+                return false;
+            }
+
+            var enemyCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var offsetToPlayer = playerMotor.transform.position - enemyCenter;
+            offsetToPlayer.y = 0f;
+            if (maxDistance > 0f && offsetToPlayer.magnitude > maxDistance)
+            {
+                return false;
+            }
+
+            var hitDirection = direction;
+            hitDirection.y = 0f;
+            if (hitDirection.sqrMagnitude <= 0.0001f)
+            {
+                hitDirection = offsetToPlayer.sqrMagnitude > 0.0001f ? offsetToPlayer.normalized : transform.forward;
+            }
+
+            return playerResources.ReceiveHit(new CombatHitInfo(
+                damageAmount,
+                playerMotor.transform.position,
+                hitDirection,
+                0f,
+                gameObject,
+                CombatTeam.Enemy));
+        }
+
         private void BeginExplosionSequence(bool preserveHitFlashFrame = false)
         {
             if (isDead || explosionRoutine != null)
@@ -1220,7 +1382,7 @@ namespace RorType.Gameplay.AI
                     continue;
                 }
 
-                if (!damageable.IsAlive || damageable.Team == CombatTeam.Player || ReferenceEquals(damageableComponent, this))
+                if (!damageable.IsAlive || ReferenceEquals(damageableComponent, this))
                 {
                     continue;
                 }

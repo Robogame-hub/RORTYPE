@@ -22,6 +22,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Range(0f, 1f)] private float airControlPercent = 0.5f;
         [SerializeField, Min(0f)] private float extraFallGravity = 20f;
         [SerializeField, Min(0f)] private float groundSnapOffset = 0.02f;
+        [SerializeField, Min(0f)] private float wallSkinWidth = 0.05f;
         [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
 
         [Header("Jump")]
@@ -64,6 +65,9 @@ namespace RorType.Gameplay.Player
         private bool hasVisualBasePose;
         private bool hasVisualPosition;
         private Vector3 visualBaseLocalPosition;
+        private Vector3 smoothedVisualWorldPosition;
+        private readonly RaycastHit[] movementCastHits = new RaycastHit[16];
+        private readonly Collider[] penetrationHits = new Collider[16];
 
         public Vector3 LastWorldMoveDirection { get; private set; } = Vector3.forward;
         public float CurrentSpeed { get; private set; }
@@ -72,6 +76,9 @@ namespace RorType.Gameplay.Player
         public bool IsDashing => dashTimer > 0f;
         public int DashCharges => dashCharges;
         public int MaxDashCharges => maxDashCharges;
+        public Vector3 RenderPosition => visualRoot != null && visualRoot != transform && hasVisualPosition
+            ? smoothedVisualWorldPosition
+            : transform.position;
 
         private void Awake()
         {
@@ -169,8 +176,16 @@ namespace RorType.Gameplay.Player
             var useGroundSnap = isGroundedForLocomotion && verticalVelocity <= 0f;
             if (useGroundSnap)
             {
-                var targetPosition = body.position + (combinedPlanarVelocity * Time.fixedDeltaTime);
+                var currentPosition = body.position;
+                var targetPosition = currentPosition + (combinedPlanarVelocity * Time.fixedDeltaTime);
                 targetPosition.y = ResolveGroundedBodyPositionY();
+                targetPosition = ResolveCollisionAwareGroundedPosition(currentPosition, targetPosition);
+                targetPosition = ResolvePenetrationFreePosition(targetPosition);
+                var resolvedPlanarDelta = targetPosition - currentPosition;
+                resolvedPlanarDelta.y = 0f;
+                planarVelocity = Time.fixedDeltaTime > 0f
+                    ? resolvedPlanarDelta / Time.fixedDeltaTime
+                    : Vector3.zero;
                 body.linearVelocity = Vector3.zero;
                 body.MovePosition(targetPosition);
             }
@@ -205,7 +220,9 @@ namespace RorType.Gameplay.Player
             hasVisualPosition = false;
             if (visualRoot != null)
             {
-                visualRoot.position = transform.TransformPoint(visualBaseLocalPosition);
+                smoothedVisualWorldPosition = transform.TransformPoint(visualBaseLocalPosition);
+                visualRoot.position = smoothedVisualWorldPosition;
+                hasVisualPosition = true;
             }
         }
 
@@ -269,6 +286,7 @@ namespace RorType.Gameplay.Player
             dashDuration = Mathf.Max(0.01f, dashDuration);
             maxDashCharges = Mathf.Max(1, maxDashCharges);
             dashChargeRecoveryTime = Mathf.Max(0.01f, dashChargeRecoveryTime);
+            wallSkinWidth = Mathf.Max(0f, wallSkinWidth);
         }
 
         private float ResolveGroundedBodyPositionY()
@@ -278,6 +296,138 @@ namespace RorType.Gameplay.Player
             var centerOffset = capsuleCollider.center.y * Mathf.Abs(lossyScale.y);
             var bottomToPivot = halfHeight - centerOffset;
             return groundProbe.GroundPoint.y + bottomToPivot + groundSnapOffset;
+        }
+
+        private Vector3 ResolveCollisionAwareGroundedPosition(Vector3 currentPosition, Vector3 targetPosition)
+        {
+            var planarDelta = targetPosition - currentPosition;
+            planarDelta.y = 0f;
+            var distance = planarDelta.magnitude;
+            if (distance <= 0.0001f || body == null)
+            {
+                return targetPosition;
+            }
+
+            var direction = planarDelta / distance;
+            if (!TryGetMovementBlocker(currentPosition, direction, distance + wallSkinWidth, out var hit))
+            {
+                return targetPosition;
+            }
+
+            var allowedDistance = Mathf.Max(0f, hit.distance - wallSkinWidth);
+            var resolvedPosition = currentPosition + (direction * Mathf.Min(distance, allowedDistance));
+            resolvedPosition.y = targetPosition.y;
+            return resolvedPosition;
+        }
+
+        private bool TryGetMovementBlocker(Vector3 castPosition, Vector3 direction, float castDistance, out RaycastHit closestHit)
+        {
+            closestHit = default;
+            if (capsuleCollider == null || castDistance <= 0f)
+            {
+                return false;
+            }
+
+            GetCapsuleWorldPoints(castPosition, out var pointA, out var pointB, out var radius);
+            var hitCount = Physics.CapsuleCastNonAlloc(
+                pointA,
+                pointB,
+                radius,
+                direction,
+                movementCastHits,
+                castDistance,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+
+            var foundHit = false;
+            var closestDistance = float.MaxValue;
+            for (var i = 0; i < hitCount; i++)
+            {
+                var candidate = movementCastHits[i];
+                movementCastHits[i] = default;
+
+                if (candidate.collider == null || candidate.collider.transform.root == transform.root)
+                {
+                    continue;
+                }
+
+                if (candidate.distance < closestDistance)
+                {
+                    closestDistance = candidate.distance;
+                    closestHit = candidate;
+                    foundHit = true;
+                }
+            }
+
+            return foundHit;
+        }
+
+        private Vector3 ResolvePenetrationFreePosition(Vector3 targetPosition)
+        {
+            if (capsuleCollider == null)
+            {
+                return targetPosition;
+            }
+
+            GetCapsuleWorldPoints(targetPosition, out var pointA, out var pointB, out var radius);
+            var boundsCenter = (pointA + pointB) * 0.5f;
+            var overlapRadius = Vector3.Distance(pointA, pointB) * 0.5f + radius + wallSkinWidth;
+            var hitCount = Physics.OverlapSphereNonAlloc(
+                boundsCenter,
+                overlapRadius,
+                penetrationHits,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+
+            var resolvedPosition = targetPosition;
+            for (var i = 0; i < hitCount; i++)
+            {
+                var candidate = penetrationHits[i];
+                penetrationHits[i] = null;
+
+                if (candidate == null || candidate.transform.root == transform.root)
+                {
+                    continue;
+                }
+
+                GetCapsuleWorldPoints(resolvedPosition, out pointA, out pointB, out radius);
+                if (!Physics.ComputePenetration(
+                        capsuleCollider,
+                        resolvedPosition,
+                        transform.rotation,
+                        candidate,
+                        candidate.transform.position,
+                        candidate.transform.rotation,
+                        out var separationDirection,
+                        out var separationDistance))
+                {
+                    continue;
+                }
+
+                separationDirection.y = 0f;
+                if (separationDirection.sqrMagnitude <= 0.0001f)
+                {
+                    continue;
+                }
+
+                resolvedPosition += separationDirection.normalized * (separationDistance + wallSkinWidth);
+            }
+
+            resolvedPosition.y = targetPosition.y;
+            return resolvedPosition;
+        }
+
+        private void GetCapsuleWorldPoints(Vector3 bodyPosition, out Vector3 pointA, out Vector3 pointB, out float radius)
+        {
+            var scale = transform.lossyScale;
+            var planarScale = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            var verticalScale = Mathf.Abs(scale.y);
+            radius = Mathf.Max(0.01f, capsuleCollider.radius * planarScale);
+            var height = Mathf.Max(radius * 2f, capsuleCollider.height * verticalScale);
+            var center = bodyPosition + Vector3.Scale(capsuleCollider.center, scale);
+            var halfSegment = Mathf.Max(0f, (height * 0.5f) - radius);
+            pointA = center + (Vector3.up * halfSegment);
+            pointB = center - (Vector3.up * halfSegment);
         }
 
         private void TickTimers(float deltaTime)
@@ -301,13 +451,15 @@ namespace RorType.Gameplay.Player
 
             if (!hasVisualPosition)
             {
-                visualRoot.position = targetPosition;
+                smoothedVisualWorldPosition = targetPosition;
+                visualRoot.position = smoothedVisualWorldPosition;
                 hasVisualPosition = true;
                 return;
             }
 
             var blend = 1f - Mathf.Exp(-visualPositionSharpness * Time.deltaTime);
-            visualRoot.position = Vector3.Lerp(visualRoot.position, targetPosition, blend);
+            smoothedVisualWorldPosition = Vector3.Lerp(smoothedVisualWorldPosition, targetPosition, blend);
+            visualRoot.position = smoothedVisualWorldPosition;
         }
 
         private void RefreshGroundedState()

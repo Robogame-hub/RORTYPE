@@ -104,6 +104,8 @@ namespace RorType.Gameplay.Player
                 meleeQueued = true;
                 inputAdapter.ConsumeMeleePressed();
             }
+
+            TickFacingAndAttacks(Time.deltaTime);
         }
 
         private void LateUpdate()
@@ -119,10 +121,10 @@ namespace RorType.Gameplay.Player
             UpdateMeleeFistVisuals();
         }
 
-        private void FixedUpdate()
+        private void TickFacingAndAttacks(float deltaTime)
         {
-            shotCooldownTimer = Mathf.Max(0f, shotCooldownTimer - Time.fixedDeltaTime);
-            meleeCooldownTimer = Mathf.Max(0f, meleeCooldownTimer - Time.fixedDeltaTime);
+            shotCooldownTimer = Mathf.Max(0f, shotCooldownTimer - deltaTime);
+            meleeCooldownTimer = Mathf.Max(0f, meleeCooldownTimer - deltaTime);
 
             var facingDirection = ResolveAimDirection();
             facingDirection.y = 0f;
@@ -135,7 +137,7 @@ namespace RorType.Gameplay.Player
                 var nextRotation = Quaternion.RotateTowards(
                     currentRotation,
                     targetRotation,
-                    turnSpeedDegrees * Time.fixedDeltaTime);
+                    turnSpeedDegrees * Mathf.Max(0f, deltaTime));
 
                 if (visualRoot == null)
                 {
@@ -269,7 +271,7 @@ namespace RorType.Gameplay.Player
                 projectileStretchMultiplier,
                 projectileSquashMultiplier,
                 projectileScaleRecoverySharpness,
-                projectileDamage,
+                GetModifiedDamage(projectileDamage),
                 projectileImpactImpulse,
                 gameObject,
                 CombatTeam.Player);
@@ -431,7 +433,7 @@ namespace RorType.Gameplay.Player
                 uniqueHitCount++;
 
                 damageable.ReceiveHit(new CombatHitInfo(
-                    meleeDamage,
+                    GetModifiedDamage(meleeDamage),
                     attackPoint,
                     currentAimDirection,
                     meleeImpactImpulse,
@@ -479,6 +481,16 @@ namespace RorType.Gameplay.Player
         private void TriggerBounce()
         {
             bounceTimer = bounceDuration;
+        }
+
+        private float GetModifiedDamage(float baseDamage)
+        {
+            if (resources == null)
+            {
+                resources = GetComponent<PlayerResourceController>();
+            }
+
+            return Mathf.Max(0f, baseDamage) * (resources != null ? resources.DamageMultiplier : 1f);
         }
 
         private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)

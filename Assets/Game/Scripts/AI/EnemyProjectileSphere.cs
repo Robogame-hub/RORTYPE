@@ -12,6 +12,7 @@ namespace RorType.Gameplay.AI
         private float lifetime;
         private float scaleRecoverySharpness;
         private float knockbackForce;
+        private float damage;
         private float age;
         private bool isInitialized;
         private bool isConsumed;
@@ -48,6 +49,7 @@ namespace RorType.Gameplay.AI
             float squashMultiplier,
             float recoverySharpness,
             float knockbackImpulse,
+            float damageAmount,
             Transform instigator)
         {
             if (body == null)
@@ -67,6 +69,7 @@ namespace RorType.Gameplay.AI
             lifetime = Mathf.Max(0.01f, lifetimeSeconds);
             scaleRecoverySharpness = Mathf.Max(0.01f, recoverySharpness);
             knockbackForce = Mathf.Max(0f, knockbackImpulse);
+            damage = Mathf.Max(0f, damageAmount);
             instigatorRoot = instigator;
 
             body.useGravity = false;
@@ -131,6 +134,22 @@ namespace RorType.Gameplay.AI
 
             if (other != null)
             {
+                if (CombatUtility.TryGetDamageable(other, out var playerDamageable, out _)
+                    && playerDamageable.Team == CombatTeam.Player
+                    && playerDamageable.IsAlive)
+                {
+                    var hitDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
+                        ? body.linearVelocity.normalized
+                        : transform.forward;
+                    playerDamageable.ReceiveHit(new CombatHitInfo(
+                        damage,
+                        other.ClosestPoint(transform.position),
+                        hitDirection,
+                        0f,
+                        gameObject,
+                        CombatTeam.Enemy));
+                }
+
                 var knockbackReceiver = other.GetComponentInParent<IKnockbackReceiver>();
                 if (knockbackReceiver != null)
                 {

@@ -12,8 +12,16 @@ namespace RorType.Gameplay.UI
         private TopDownPlayerMotor motor;
         private Canvas canvas;
         private Text ammoLabel;
+        private Text moneyLabel;
         private Image[] dashCharges;
         private Image staminaFill;
+        private Image healthFill;
+        private float ammoPulseTimer;
+        private float moneyPulseTimer;
+        private float healthPulseTimer;
+        private int lastAmmo = -1;
+        private int lastMoney = -1;
+        private float lastHealth = -1f;
 
         public static void Bind(PlayerResourceController playerResources)
         {
@@ -69,9 +77,12 @@ namespace RorType.Gameplay.UI
                 return;
             }
 
+            UpdateTextFeedback();
             ammoLabel.text = $"\u041f\u0430\u0442\u0440\u043e\u043d\u044b {resources.Ammo}";
+            moneyLabel.text = $"\u0417\u043E\u043B\u043E\u0442\u043E {resources.Money}";
             UpdateDashUi();
             UpdateStaminaUi();
+            UpdateHealthUi();
         }
 
         private void BuildUi()
@@ -87,8 +98,12 @@ namespace RorType.Gameplay.UI
             canvasObject.transform.SetParent(transform, false);
             canvas = canvasObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 450;
-            canvasObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            canvas.sortingOrder = 1000;
+            var scaler = canvasObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
+            scaler.matchWidthOrHeight = 0.5f;
 
             var root = new GameObject("Player Status", typeof(RectTransform), typeof(VerticalLayoutGroup));
             root.transform.SetParent(canvas.transform, false);
@@ -146,6 +161,41 @@ namespace RorType.Gameplay.UI
             fillRect.pivot = new Vector2(0f, 0.5f);
             fillRect.offsetMin = new Vector2(2f, 2f);
             fillRect.offsetMax = new Vector2(-2f, -2f);
+
+            var healthRoot = new GameObject("Health", typeof(RectTransform), typeof(Image));
+            healthRoot.transform.SetParent(root.transform, false);
+            healthRoot.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 16f);
+            healthRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+
+            var healthFillObject = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+            healthFillObject.transform.SetParent(healthRoot.transform, false);
+            healthFill = healthFillObject.GetComponent<Image>();
+            healthFill.color = new Color(0.95f, 0.14f, 0.14f, 0.96f);
+            healthFill.type = Image.Type.Filled;
+            healthFill.fillMethod = Image.FillMethod.Horizontal;
+            healthFill.fillOrigin = 0;
+
+            var healthFillRect = healthFill.rectTransform;
+            healthFillRect.anchorMin = new Vector2(0f, 0f);
+            healthFillRect.anchorMax = new Vector2(1f, 1f);
+            healthFillRect.pivot = new Vector2(0f, 0.5f);
+            healthFillRect.offsetMin = new Vector2(2f, 2f);
+            healthFillRect.offsetMax = new Vector2(-2f, -2f);
+
+            var moneyRoot = new GameObject("Money Status", typeof(RectTransform));
+            moneyRoot.transform.SetParent(canvas.transform, false);
+            var moneyRootRect = moneyRoot.GetComponent<RectTransform>();
+            moneyRootRect.anchorMin = new Vector2(1f, 1f);
+            moneyRootRect.anchorMax = new Vector2(1f, 1f);
+            moneyRootRect.pivot = new Vector2(1f, 1f);
+            moneyRootRect.sizeDelta = new Vector2(320f, 44f);
+            moneyRootRect.anchoredPosition = new Vector2(-28f, -548f);
+
+            moneyLabel = CreateLabel("Money Label", moneyRoot.transform, uiFont, 32, new Vector2(320f, 44f));
+            moneyLabel.color = new Color(1f, 0.86f, 0.08f, 1f);
+            var outline = moneyLabel.gameObject.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 1f);
+            outline.effectDistance = new Vector2(3f, -3f);
         }
 
         private void UpdateDashUi()
@@ -171,7 +221,71 @@ namespace RorType.Gameplay.UI
                 return;
             }
 
-            staminaFill.fillAmount = resources.StaminaNormalized;
+            SetBarFill(staminaFill, resources.StaminaNormalized);
+        }
+
+        private void UpdateHealthUi()
+        {
+            if (healthFill == null)
+            {
+                return;
+            }
+
+            SetBarFill(healthFill, resources.HealthNormalized);
+        }
+
+        private void UpdateTextFeedback()
+        {
+            if (lastAmmo >= 0 && lastAmmo != resources.Ammo)
+            {
+                ammoPulseTimer = 0.18f;
+            }
+
+            if (lastMoney >= 0 && lastMoney != resources.Money)
+            {
+                moneyPulseTimer = 0.22f;
+            }
+
+            if (lastHealth >= 0f && !Mathf.Approximately(lastHealth, resources.Health))
+            {
+                healthPulseTimer = 0.18f;
+            }
+
+            lastAmmo = resources.Ammo;
+            lastMoney = resources.Money;
+            lastHealth = resources.Health;
+
+            ammoPulseTimer = Mathf.Max(0f, ammoPulseTimer - Time.deltaTime);
+            moneyPulseTimer = Mathf.Max(0f, moneyPulseTimer - Time.deltaTime);
+            healthPulseTimer = Mathf.Max(0f, healthPulseTimer - Time.deltaTime);
+
+            ApplyPulse(ammoLabel != null ? ammoLabel.rectTransform : null, ammoPulseTimer);
+            ApplyPulse(moneyLabel != null ? moneyLabel.rectTransform : null, moneyPulseTimer);
+            ApplyPulse(healthFill != null ? healthFill.rectTransform.parent as RectTransform : null, healthPulseTimer);
+        }
+
+        private static void ApplyPulse(RectTransform target, float timer)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            var amount = timer > 0f ? 1f + (Mathf.Sin((timer / 0.22f) * Mathf.PI) * 0.12f) : 1f;
+            target.localScale = Vector3.one * amount;
+        }
+
+        private static void SetBarFill(Image fill, float normalizedAmount)
+        {
+            if (fill == null)
+            {
+                return;
+            }
+
+            var clampedAmount = Mathf.Clamp01(normalizedAmount);
+            fill.fillAmount = clampedAmount;
+            fill.enabled = clampedAmount > 0.001f;
+            fill.rectTransform.localScale = new Vector3(clampedAmount, 1f, 1f);
         }
 
         private static Text CreateLabel(string objectName, Transform parent, Font font, int fontSize, Vector2 size)

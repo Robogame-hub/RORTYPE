@@ -1872,11 +1872,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.WorldInteractable
   mode: 1
+  shopKind: 0
   interactionRadius: 7
   interactionPrompt: "\u0412\u0437\u044F\u0442\u044C: \u043D\u0430\u0436\u043C\u0438\u0442\u0435 E"
   completedPrompt: "\u0412\u0437\u044F\u0442\u043E"
-  ammoReward: 20
+  ammoReward: 0
+  moneyReward: 200
   oneShot: 1
   disableMinimapMarkerOnComplete: 1
   autoCreateInteractionTrigger: 1
   feedbackDuration: 1.2
+  ammoPurchaseAmount: 1
+  ammoPurchaseCost: 1
+  healthPurchaseAmount: 20
+  healthPurchaseCost: 20
+  damageUpgradeCost: 1000
+  pickupDisappearDelay: 0.7

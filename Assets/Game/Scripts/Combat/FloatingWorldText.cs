@@ -15,6 +15,23 @@ namespace RorType.Gameplay.Combat
         private Color baseColor = Color.white;
         private float age;
 
+        public static FloatingWorldText Spawn(Vector3 worldPosition, string content, Color color, float scale = 0.16f)
+        {
+            var textObject = new GameObject("FloatingWorldText");
+            textObject.transform.position = worldPosition;
+
+            var textMesh = textObject.AddComponent<TextMesh>();
+            textMesh.anchor = TextAnchor.MiddleCenter;
+            textMesh.alignment = TextAlignment.Center;
+            textMesh.fontSize = 64;
+            textMesh.characterSize = 0.1f;
+
+            textObject.AddComponent<WorldBillboard>();
+            var floatingText = textObject.AddComponent<FloatingWorldText>();
+            floatingText.Initialize(content, color, scale);
+            return floatingText;
+        }
+
         private void Awake()
         {
             textMesh = GetComponent<TextMesh>();

@@ -380,10 +380,65 @@
 
 ## 2026-06-10 interaction resources note
 
-- Player resources are now represented by `PlayerResourceController`: starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `25/sec`, stamina regen `35/sec` after `0.45 sec`.
+- Player resources are now represented by `PlayerResourceController`: starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `10/sec`, stamina regen `35/sec` after `0.45 sec`.
 - Player shooting consumes `1` ammo per projectile. At `0` ammo ranged fire is blocked, while melee remains available.
 - Player dash now uses `2` charges. One charge recovers every `5 sec`; the small dash cooldown still prevents same-frame dash spam.
 - `PlayerStatusUiRuntime` creates the bottom-right runtime HUD for ammo, two dash charge rectangles, and stamina.
 - `WorldInteractable` extends the portal-style `E` interaction flow to non-portal objects through root `SphereCollider` triggers.
 - `Store` and `HAMMER` use purchase prompts and show a short bought feedback message.
 - `Chest` and `Capsule` are one-shot ammo pickups: chest gives `20`, capsule gives `50`, then disables its minimap marker and trigger interaction.
+
+## 2026-06-10 economy/health implementation note
+
+- User-facing workflow preference: for large gameplay requests, first convert the request into a concrete action plan, then implement.
+- `PlayerResourceController` now also stores money, health, and one-time damage upgrade state. Defaults: player health `500`, starting ammo `100`, stamina `100`, money `0`; ammo/money/health/damage-upgrade persist statically across scene loads so scene-local player instances do not reset progress on portal travel.
+- `PlayerStatusUiRuntime` now shows yellow outlined money text under the top-right minimap area and a red health bar under the stamina bar. Ammo, money, and health changes pulse in the HUD.
+- Chest/capsule interaction is now resource pickup, not ammo-only pickup: chest resolves to `200` gold, capsule resolves to `200` gold plus `100` ammo, shows floating reward text, disables the minimap marker/trigger, then destroys the world object after feedback.
+- `Store` opens a mouse-click shop menu after `E`: buy `1` ammo for `1` gold or buy `20` health for `20` gold. `HAMMER` opens a blacksmith menu after `E`: buy ammo or buy one-time damage x2 for `1000` gold.
+- Incoming player health damage is now routed through `IDamageable`: melee enemies deal `10`, shooter projectiles deal `20`, and enemy exploder explosions deal `30`.
+- Enemy death now drops `1-3` resource pickups. Money pickups are yellow random spheres/cubes worth `2` gold each. Shooter enemies may also drop red random spheres/cubes worth `1` ammo each. All enemies may also drop a red health pickup worth `20 HP`; the health pickup is authored at runtime as a red cross made from two rectangular cube bars.
+- New environment scripts/prefabs: `DestructibleCover`/`DestructibleCover.prefab` is a prefab-authored six-block destructible cover with `15 HP`, `4m x 2m` footprint; `ExplosiveBarrel`/`ExplosiveBarrel.prefab` is a prefab-authored light-red cylinder that explodes after three player hits, flashes red three times, and deals `3` damage to enemies within `5m`.
+- `TopDownPlayerMotor` grounded movement now sweep-tests the Rigidbody before `MovePosition`, reducing the wall-phasing bug caused by direct grounded position moves.
+
+## 2026-06-10 economy/health audit note
+
+- A follow-up audit found the economy/health/destructible code present in the working tree, but `DestructibleCover.prefab` and `ExplosiveBarrel.prefab` are not placed in `Assets/Game/Scene/Level_1.unity` yet.
+- User-reported runtime symptoms remain: health UI exists but damage is not visibly deducted, stamina UI exists but stamina is not visibly spent, money pickups can drop but the money counter is not visible in-game. Treat this as a runtime wiring/visibility verification task before expanding the feature set.
+
+## 2026-06-10 economy/health implementation follow-up
+
+- Runtime defaults are now guarded in `PlayerResourceController` and `WorldInteractable`, so older prefab/scene instances cannot silently load missing money/health/shop fields as zero.
+- `PlayerStatusUiRuntime` now uses a `1920 x 1080` reference resolution and higher sorting order, keeping the yellow outlined money counter visible below the `500 x 500` top-right minimap.
+- `PlayerResourceController.ReceiveHit` now spawns red `-N HP` floating feedback above the player when health is deducted.
+- `TopDownPlayerMotor` now uses an explicit capsule cast plus a penetration correction pass during grounded movement, strengthening the wall-collision fix beyond the previous Rigidbody sweep.
+- `Chest`, `Capsule`, `Store`, and `HAMMER` prefabs now explicitly serialize the new economy/shop fields. Chest is `200` gold; capsule is `200` gold plus `100` ammo; merchant sells `1` ammo for `1` gold and `20` HP for `20` gold; blacksmith sells ammo and the one-time `1000` gold damage upgrade.
+- `Assets/Game/Scene/Level_1.unity` now includes manually placed test instances near the scene player start: `DestructibleCover_Test`, `ExplosiveBarrel_Test_A`, and `ExplosiveBarrel_Test_B`.
+- Unity batchmode compile/import check passed on 2026-06-10 with exit code `0`; only an unrelated existing warning remains for unused `TopDownPlayerMotor.airDashConsumed`.
+
+## 2026-06-12 player resource balance fix
+
+- Accepted player resource balance is now max/starting health `500`, max stamina `100`, and sprint stamina drain `10/sec`.
+- Enemy damage against the player is now intentionally scaled for visible HUD changes: melee enemy `10`, shooter projectile `20`, enemy exploder explosion `30`.
+- `TopDownPlayer.prefab`, scene-local players in `Level_1`, `Hub_1`, `Level_2`, and `PlayerMovementTest`, and enemy prefabs serialize these accepted values so runtime UI bars are not stuck on older `1000 HP` / `25 stamina/sec` / `1-3 damage` data.
+- `PlayerStatusUiRuntime` now scales stamina/health fill rects on X in addition to setting `Image.fillAmount`, because runtime-created fill images have no authored sprite and must not rely on `Image.Type.Filled` alone for visible bar depletion.
+
+## 2026-06-12 authored destructible prefab note
+
+- `DestructibleCover` and `ExplosiveBarrel` must not build their blocking visuals in runtime `Awake`. Their prefabs now contain authored child meshes/colliders for scene editing: six `CoverBlock_*` cube children for cover and one `BarrelCylinder` cylinder child for the barrel.
+- `DestructibleCover` and `ExplosiveBarrel` scripts now only resolve existing authored visuals/colliders and log a warning if a prefab is missing them. The remaining runtime primitive creation in `ExplosiveBarrel` is only the short-lived post-detonation explosion effect, not level-blocking visual.
+
+## 2026-06-12 explosive barrel target note
+
+- `ExplosiveBarrel` explosion damage now targets both `CombatTeam.Enemy` and `CombatTeam.Neutral` damageables, excluding the exploding barrel itself. This lets barrel explosions damage `DestructibleCover` while still excluding the player.
+
+## 2026-06-12 pickup magnet and health drop note
+
+- `ResourcePickupCollectible` now supports `PickupKind.Health` in addition to money and ammo. Health pickups are red cross-shaped pickups built from two rectangular cube bars and restore `20 HP` by default from enemy drops.
+- Enemy resource drops now roll health first with `healthDropChance = 0.2`; if health does not drop, shooter enemies can still drop ammo by `shooterAmmoDropChance`, otherwise the drop is money.
+- Money, ammo, and health enemy pickups now magnetize toward the player within a horizontal `2m` radius, then collect through the same reward path as trigger contact.
+
+## 2026-06-12 movement smoothing note
+
+- Player and enemy visible meshes now keep their own smoothed render-world position instead of lerping from a child transform after the physics/nav parent has already stepped. This prevents the visual sphere/capsule from inheriting one-frame root jumps before smoothing.
+- `TopDownCameraRig` follows `TopDownPlayerMotor.RenderPosition` when the target is the player, so camera motion is based on the smoothed visual position rather than the discrete physics root.
+- `EnemyCapsuleController` nav decisions and visual rotation now tick in `Update` with `Time.deltaTime`; the player facing/attack visual layer also rotates in `Update`. Player Rigidbody locomotion remains in `FixedUpdate` to keep collision resolution stable.

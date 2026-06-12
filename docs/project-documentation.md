@@ -578,10 +578,36 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 
 ## Current interaction/resource implementation on 2026-06-10
 
-- `Assets/Game/Scripts/Player/PlayerResourceController.cs` stores player ammo and stamina. The current accepted defaults are starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `25/sec`, stamina regen `35/sec` after `0.45 sec`.
+- `Assets/Game/Scripts/Player/PlayerResourceController.cs` stores player ammo and stamina. The current accepted defaults are starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `10/sec`, stamina regen `35/sec` after `0.45 sec`.
 - `TopDownFacingController` now spends `1` ammo before spawning a projectile. If ammo is `0`, ranged shooting does not fire; melee attacks still work.
 - `TopDownPlayerMotor` now has `2` dash charges and recovers one charge every `5 sec`. Sprinting consumes stamina through `PlayerResourceController`.
 - `Assets/Game/Scripts/UI/PlayerStatusUiRuntime.cs` creates a runtime bottom-right HUD showing ammo, two dash rectangles, and stamina.
 - `Assets/Game/Scripts/Interaction/WorldInteractable.cs` adds portal-style proximity interaction for non-portal objects, using the existing `ScenePortalInteractionController` and `PortalUiRuntime` prompt.
 - `Store` and `HAMMER` prefabs have root `SphereCollider` trigger interaction and show `Buy: press E` / `Bought` style prompt behavior configured with Russian prefab text.
 - `Chest` and `Capsule` prefabs have root `SphereCollider` trigger interaction. Chest grants `20` ammo, capsule grants `50` ammo, then disables its `MinimapTrackable` and trigger so it cannot be taken again.
+
+## Current economy, health, pickups, and destructibles on 2026-06-10
+
+This section supersedes the older ammo-only chest/capsule description above.
+
+- `PlayerResourceController` is now the player source of truth for ammo, money, health, stamina, and the one-time damage upgrade. Defaults are health `500`, starting ammo `100`, money `0`, stamina `100`.
+- Ammo, money, health, and damage-upgrade ownership persist through static runtime state, so portal scene changes that instantiate a new scene-local player do not reset the player's core resources.
+- Player HP damage values are: melee enemy `10`, shooter projectile `20`, enemy exploder explosion `30`.
+- `PlayerStatusUiRuntime` shows ammo/dashes/stamina/health in the bottom-right HUD and yellow outlined money text under the top-right minimap area. Ammo, money, and health changes give a short UI pulse.
+- Stamina and health bars explicitly scale their fill rects on X every frame, so bar depletion is visible even when the runtime-created UI images have no authored sprite.
+- `WorldInteractable` supports resource pickups and shop menus. Chests resolve to `200` gold. Capsules resolve to `200` gold plus `100` ammo. Pickup interaction shows floating reward text, disables the minimap marker and interaction trigger, then removes the world object after feedback.
+- `Store` opens a two-option merchant menu after pressing `E`: buy ammo (`1` gold for `1` ammo) or buy health (`20` gold for `20` HP).
+- `HAMMER` opens a blacksmith menu after pressing `E`: buy ammo or buy a one-time `x2` damage upgrade for `1000` gold.
+- Enemy death drops `1-3` resource pickups. Yellow random sphere/cube pickups give `2` gold. Shooter enemies can also drop red random sphere/cube pickups that give `1` ammo. All enemies can now also drop a red cross-shaped health pickup that restores `20 HP`. Enemy money, ammo, and health pickups magnetize to the player inside a horizontal `2m` radius.
+- `Assets/Game/Scripts/Environment/DestructibleCover.cs` and `Assets/Game/Prefabs/Environment/DestructibleCover.prefab` define a six-block destructible cover target with `15 HP`, `4m` width, and `2m` height. The cover's blocking visual is authored directly in the prefab as six child cube meshes/colliders, and the prefab includes a minimap trackable so it can be authored as a separate map point.
+- `Assets/Game/Scripts/Environment/ExplosiveBarrel.cs` and `Assets/Game/Prefabs/Environment/ExplosiveBarrel.prefab` define a light-red explosive cylinder. The barrel's blocking visual/collider is authored directly in the prefab as a child `BarrelCylinder`; it explodes after three player hits, flashes red three times before detonation, and deals `3` damage to enemies and neutral destructible objects within `5m`.
+- `TopDownPlayerMotor` grounded movement now performs a Rigidbody sweep before `MovePosition`, preventing direct grounded movement from pushing the player through wall colliders.
+
+## Current economy/health follow-up on 2026-06-10
+
+- Resource and shop scripts now normalize their runtime defaults in `Awake`, so older scene/prefab instances with missing serialized fields still get valid money, health, stamina, and shop values.
+- `TopDownPlayer.prefab` and scene-local player instances explicitly serialize `maxMoney = 999999`, `maxHealth = 500`, `startingHealth = 500`, `maxStamina = 100`, `sprintDrainPerSecond = 10`, and `wallSkinWidth = 0.05` where applicable.
+- `PlayerStatusUiRuntime` uses a `1920 x 1080` reference resolution and sorting order `1000`; the money label is yellow with black outline and anchored below the top-right minimap.
+- `Chest.prefab`, `Capsule.prefab`, `Store.prefab`, and `HAMMER.prefab` explicitly serialize the accepted economy values: chest `200` gold; capsule `200` gold + `100` ammo; merchant ammo/health purchases; blacksmith ammo and one-time `1000` gold damage upgrade.
+- `Level_1.unity` contains manually placed test instances near the player start for `DestructibleCover` and two `ExplosiveBarrel` objects.
+- The wall collision fix is now stronger than the earlier Rigidbody sweep: grounded movement performs a capsule cast and a penetration correction pass before `MovePosition`.

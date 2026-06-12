@@ -147,10 +147,12 @@ MonoBehaviour:
   shooterProjectileRadius: 0.18
   shooterProjectileForwardOffset: 0.95
   shooterKnockbackForce: 2.6
+  shooterProjectileDamage: 20
   shooterProjectileColor: {r: 1, g: 0.86, b: 0.18, a: 1}
   meleeAttackRange: 1.65
   meleeInterval: 0.5
   meleeKnockbackForce: 3.15
+  meleeDamage: 10
   meleePunchDuration: 0.18
   meleeForwardReach: 0.7
   meleeSideOffset: 0.38
@@ -167,7 +169,7 @@ MonoBehaviour:
   explodeVisualRadius: 2.6
   explodeEffectRadius: 3
   explodeDamageRadius: 2
-  explodeDamage: 3
+  explodeDamage: 30
   explodeKnockbackForce: 4.8
   explodeWarningColor: {r: 1, g: 0.16, b: 0.16, a: 1}
   visualPositionSharpness: 30
