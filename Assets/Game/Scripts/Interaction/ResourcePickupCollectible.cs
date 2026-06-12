@@ -17,6 +17,10 @@ namespace RorType.Gameplay.Interaction
         private const float DefaultMagnetRadius = 2f;
         private const float DefaultMagnetSpeed = 8f;
         private const float DefaultMagnetCollectDistance = 0.35f;
+        private const string MoneyPickupResourcePath = "ResourcePickups/GoldPickup";
+        private const string AmmoCubePickupResourcePath = "ResourcePickups/AmmoCubePickup";
+        private const string AmmoSpherePickupResourcePath = "ResourcePickups/AmmoSpherePickup";
+        private const string HealthPickupResourcePath = "ResourcePickups/HealthPickup";
 
         [SerializeField] private PickupKind kind;
         [SerializeField, Min(1)] private int amount = 1;
@@ -33,6 +37,13 @@ namespace RorType.Gameplay.Interaction
         private PlayerResourceController magnetTarget;
         private float age;
         private bool collected;
+        private static ResourcePickupCollectible moneyPickupPrefab;
+        private static ResourcePickupCollectible ammoCubePickupPrefab;
+        private static ResourcePickupCollectible ammoSpherePickupPrefab;
+        private static ResourcePickupCollectible healthPickupPrefab;
+
+        public PickupKind Kind => kind;
+        public int Amount => Mathf.Max(1, amount);
 
         public static ResourcePickupCollectible Spawn(
             PickupKind pickupKind,
@@ -40,24 +51,83 @@ namespace RorType.Gameplay.Interaction
             Vector3 position,
             Vector3 launchVelocity)
         {
+            return Spawn(pickupKind, null, pickupAmount, position, launchVelocity);
+        }
+
+        public static ResourcePickupCollectible Spawn(
+            PickupKind pickupKind,
+            ResourcePickupCollectible pickupPrefab,
+            int fallbackAmount,
+            Vector3 position,
+            Vector3 launchVelocity)
+        {
+            var prefab = pickupPrefab != null ? pickupPrefab : ResolveDefaultPickupPrefab(pickupKind);
+            if (prefab != null)
+            {
+                var pickupInstance = Instantiate(prefab.gameObject, position, Quaternion.identity);
+                pickupInstance.name = prefab.gameObject.name;
+                var collectible = pickupInstance.GetComponent<ResourcePickupCollectible>();
+                if (collectible == null)
+                {
+                    collectible = pickupInstance.AddComponent<ResourcePickupCollectible>();
+                    collectible.kind = pickupKind;
+                    collectible.amount = Mathf.Max(1, fallbackAmount);
+                }
+
+                collectible.PrepareSpawnedInstance(launchVelocity);
+                CombatRuntimeBudget.Register(pickupInstance, CombatRuntimeObjectKind.ResourcePickup);
+                return collectible;
+            }
+
             var pickup = pickupKind == PickupKind.Health
                 ? CreateHealthCrossPickup()
                 : CreatePrimitivePickup(pickupKind);
             pickup.transform.position = position;
 
-            var trigger = pickup.AddComponent<SphereCollider>();
-            trigger.isTrigger = true;
-            trigger.radius = 0.85f;
-
-            var body = pickup.AddComponent<Rigidbody>();
-            body.useGravity = true;
-            body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            body.linearVelocity = launchVelocity;
-            body.angularVelocity = Random.insideUnitSphere * 4f;
-
             var collectible = pickup.AddComponent<ResourcePickupCollectible>();
-            collectible.Initialize(pickupKind, pickupAmount);
+            collectible.Initialize(pickupKind, fallbackAmount);
+            collectible.PrepareSpawnedInstance(launchVelocity);
+            CombatRuntimeBudget.Register(pickup, CombatRuntimeObjectKind.ResourcePickup);
             return collectible;
+        }
+
+        private static ResourcePickupCollectible ResolveDefaultPickupPrefab(PickupKind pickupKind)
+        {
+            switch (pickupKind)
+            {
+                case PickupKind.Money:
+                    return moneyPickupPrefab != null
+                        ? moneyPickupPrefab
+                        : moneyPickupPrefab = LoadPickupPrefab(MoneyPickupResourcePath);
+                case PickupKind.Health:
+                    return healthPickupPrefab != null
+                        ? healthPickupPrefab
+                        : healthPickupPrefab = LoadPickupPrefab(HealthPickupResourcePath);
+                case PickupKind.Ammo:
+                    return Random.value < 0.5f ? ResolveAmmoCubePickupPrefab() : ResolveAmmoSpherePickupPrefab();
+                default:
+                    return null;
+            }
+        }
+
+        private static ResourcePickupCollectible ResolveAmmoCubePickupPrefab()
+        {
+            return ammoCubePickupPrefab != null
+                ? ammoCubePickupPrefab
+                : ammoCubePickupPrefab = LoadPickupPrefab(AmmoCubePickupResourcePath);
+        }
+
+        private static ResourcePickupCollectible ResolveAmmoSpherePickupPrefab()
+        {
+            return ammoSpherePickupPrefab != null
+                ? ammoSpherePickupPrefab
+                : ammoSpherePickupPrefab = LoadPickupPrefab(AmmoSpherePickupResourcePath);
+        }
+
+        private static ResourcePickupCollectible LoadPickupPrefab(string resourcePath)
+        {
+            var prefab = Resources.Load<GameObject>(resourcePath);
+            return prefab != null ? prefab.GetComponent<ResourcePickupCollectible>() : null;
         }
 
         private static GameObject CreatePrimitivePickup(PickupKind pickupKind)
@@ -70,15 +140,17 @@ namespace RorType.Gameplay.Interaction
             var renderer = pickup.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = pickupKind == PickupKind.Money
-                    ? new Color(1f, 0.88f, 0.05f)
-                    : new Color(1f, 0.12f, 0.08f);
+                RuntimeRendererUtility.SetColor(
+                    renderer,
+                    pickupKind == PickupKind.Money
+                        ? new Color(1f, 0.88f, 0.05f)
+                        : new Color(1f, 0.12f, 0.08f));
             }
 
             var collider = pickup.GetComponent<Collider>();
             if (collider != null)
             {
-                collider.isTrigger = false;
+                collider.isTrigger = true;
             }
 
             return pickup;
@@ -103,7 +175,22 @@ namespace RorType.Gameplay.Interaction
             var renderer = bar.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = new Color(1f, 0.08f, 0.08f);
+                RuntimeRendererUtility.SetColor(renderer, new Color(1f, 0.08f, 0.08f));
+            }
+
+            var collider = bar.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.isTrigger = true;
+            }
+        }
+
+        private static void ConfigureCollidersAsTriggers(GameObject pickup)
+        {
+            var colliders = pickup.GetComponentsInChildren<Collider>();
+            for (var i = 0; i < colliders.Length; i++)
+            {
+                colliders[i].isTrigger = true;
             }
         }
 
@@ -111,10 +198,42 @@ namespace RorType.Gameplay.Interaction
         {
             kind = pickupKind;
             amount = Mathf.Max(1, pickupAmount);
+        }
+
+        private void PrepareSpawnedInstance(Vector3 launchVelocity)
+        {
+            amount = Mathf.Max(1, amount);
+            EnsureCollectionTrigger();
+            ConfigureCollidersAsTriggers(gameObject);
             body = GetComponent<Rigidbody>();
+            if (body == null)
+            {
+                body = gameObject.AddComponent<Rigidbody>();
+            }
+
+            body.useGravity = true;
+            body.isKinematic = false;
+            body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            body.linearVelocity = launchVelocity;
+            body.angularVelocity = Random.insideUnitSphere * 4f;
             basePosition = transform.position;
             age = 0f;
             collected = false;
+        }
+
+        private void EnsureCollectionTrigger()
+        {
+            var trigger = GetComponent<SphereCollider>();
+            if (trigger == null)
+            {
+                trigger = gameObject.AddComponent<SphereCollider>();
+            }
+
+            trigger.isTrigger = true;
+            if (trigger.radius <= 0f)
+            {
+                trigger.radius = 0.85f;
+            }
         }
 
         private void Update()
@@ -213,7 +332,7 @@ namespace RorType.Gameplay.Interaction
 
         private PlayerResourceController FindMagnetTarget()
         {
-            var playerResources = Object.FindFirstObjectByType<PlayerResourceController>();
+            var playerResources = PlayerResourceController.ActivePlayer;
             return playerResources != null && IsTargetWithinMagnetRadius(playerResources)
                 ? playerResources
                 : null;

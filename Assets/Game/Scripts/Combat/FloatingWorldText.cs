@@ -11,7 +11,6 @@ namespace RorType.Gameplay.Combat
         [SerializeField, Min(0f)] private float fadeSharpness = 10f;
 
         private TextMesh textMesh;
-        private MeshRenderer meshRenderer;
         private Color baseColor = Color.white;
         private float age;
 
@@ -35,7 +34,6 @@ namespace RorType.Gameplay.Combat
         private void Awake()
         {
             textMesh = GetComponent<TextMesh>();
-            meshRenderer = GetComponent<MeshRenderer>();
         }
 
         public void Initialize(string content, Color color, float scale)
@@ -50,6 +48,7 @@ namespace RorType.Gameplay.Combat
             baseColor = color;
             transform.localScale = Vector3.one * Mathf.Max(0.01f, scale);
             age = 0f;
+            CombatRuntimeBudget.Register(gameObject, CombatRuntimeObjectKind.FloatingText);
         }
 
         private void Update()
@@ -63,11 +62,6 @@ namespace RorType.Gameplay.Combat
             if (textMesh != null)
             {
                 textMesh.color = Color.Lerp(textMesh.color, targetColor, 1f - Mathf.Exp(-fadeSharpness * Time.deltaTime));
-            }
-
-            if (meshRenderer != null && meshRenderer.material != null)
-            {
-                meshRenderer.material.color = textMesh != null ? textMesh.color : targetColor;
             }
 
             if (age >= lifetime)

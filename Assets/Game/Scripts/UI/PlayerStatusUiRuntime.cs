@@ -63,7 +63,7 @@ namespace RorType.Gameplay.UI
         {
             if (resources == null || !resources.isActiveAndEnabled)
             {
-                resources = FindFirstObjectByType<PlayerResourceController>();
+                resources = PlayerResourceController.ActivePlayer;
                 motor = resources != null ? resources.GetComponent<TopDownPlayerMotor>() : null;
             }
 

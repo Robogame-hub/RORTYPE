@@ -22,6 +22,7 @@ namespace RorType.Gameplay.Player
         public Vector3 GroundPoint { get; private set; }
         public float GroundDistance { get; private set; } = float.PositiveInfinity;
         public float SlopeAngle { get; private set; }
+        public float MaxSlopeAngle => maxSlopeAngle;
 
         private void Awake()
         {
@@ -30,10 +31,74 @@ namespace RorType.Gameplay.Player
 
         public void Probe()
         {
+            if (TrySampleGround(
+                    transform.position,
+                    out var sampledPoint,
+                    out var sampledNormal,
+                    out var sampledDistance,
+                    out var sampledSlopeAngle))
+            {
+                GroundPoint = sampledPoint;
+                GroundNormal = sampledNormal;
+                GroundDistance = sampledDistance;
+                SlopeAngle = sampledSlopeAngle;
+                IsGrounded = GroundDistance <= groundedDistanceTolerance;
+                IsStableGround = IsGrounded && SlopeAngle <= maxSlopeAngle;
+                return;
+            }
+
+            IsGrounded = false;
+            IsStableGround = false;
+            GroundPoint = Vector3.zero;
+            GroundNormal = Vector3.up;
+            GroundDistance = float.PositiveInfinity;
+            SlopeAngle = 90f;
+        }
+
+        public bool IsStableSurfaceNormal(Vector3 normal)
+        {
+            return Vector3.Angle(normal.normalized, Vector3.up) <= maxSlopeAngle;
+        }
+
+        public bool IsGroundCollider(Collider candidate)
+        {
+            return candidate != null && ((1 << candidate.gameObject.layer) & ResolveGroundMask()) != 0;
+        }
+
+        public bool TrySampleStableGround(Vector3 bodyPosition, out Vector3 groundPoint, out Vector3 groundNormal)
+        {
+            return TrySampleStableGround(bodyPosition, groundedDistanceTolerance, out groundPoint, out groundNormal);
+        }
+
+        public bool TrySampleStableGround(
+            Vector3 bodyPosition,
+            float maxGroundDistance,
+            out Vector3 groundPoint,
+            out Vector3 groundNormal)
+        {
+            if (TrySampleGround(bodyPosition, out groundPoint, out groundNormal, out var groundDistance, out var slopeAngle)
+                && groundDistance <= maxGroundDistance
+                && slopeAngle <= maxSlopeAngle)
+            {
+                return true;
+            }
+
+            groundPoint = default;
+            groundNormal = Vector3.up;
+            return false;
+        }
+
+        private bool TrySampleGround(
+            Vector3 bodyPosition,
+            out Vector3 groundPoint,
+            out Vector3 groundNormal,
+            out float groundDistance,
+            out float slopeAngle)
+        {
             var lossyScale = transform.lossyScale;
             var radius = capsuleCollider.radius * Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.z)) * probeRadiusScale;
             var halfHeight = Mathf.Max(capsuleCollider.height * Mathf.Abs(lossyScale.y) * 0.5f, radius);
-            var center = transform.TransformPoint(capsuleCollider.center);
+            var center = bodyPosition + Vector3.Scale(capsuleCollider.center, lossyScale);
             var bottomHemisphereCenter = center + (Vector3.down * Mathf.Max(0f, halfHeight - radius));
             var castOrigin = bottomHemisphereCenter + (Vector3.up * (radius + probeStartOffset));
             var castDistance = Mathf.Max(0.01f, (halfHeight - radius) + probeDistance + probeStartOffset);
@@ -55,6 +120,7 @@ namespace RorType.Gameplay.Player
             for (var i = 0; i < hitCount; i++)
             {
                 var hit = HitBuffer[i];
+                HitBuffer[i] = default;
                 if (hit.collider == null || hit.collider == capsuleCollider || hit.collider.transform.IsChildOf(transform))
                 {
                     continue;
@@ -72,21 +138,18 @@ namespace RorType.Gameplay.Player
 
             if (hasValidHit)
             {
-                GroundPoint = bestHit.point;
-                GroundNormal = bestHit.normal.normalized;
-                GroundDistance = Mathf.Max(0f, (bottomHemisphereCenter - (Vector3.up * radius)).y - GroundPoint.y);
-                SlopeAngle = Vector3.Angle(GroundNormal, Vector3.up);
-                IsGrounded = GroundDistance <= groundedDistanceTolerance;
-                IsStableGround = IsGrounded && SlopeAngle <= maxSlopeAngle;
-                return;
+                groundPoint = bestHit.point;
+                groundNormal = bestHit.normal.normalized;
+                groundDistance = Mathf.Max(0f, (bottomHemisphereCenter - (Vector3.up * radius)).y - groundPoint.y);
+                slopeAngle = Vector3.Angle(groundNormal, Vector3.up);
+                return true;
             }
 
-            IsGrounded = false;
-            IsStableGround = false;
-            GroundPoint = Vector3.zero;
-            GroundNormal = Vector3.up;
-            GroundDistance = float.PositiveInfinity;
-            SlopeAngle = 90f;
+            groundPoint = default;
+            groundNormal = Vector3.up;
+            groundDistance = float.PositiveInfinity;
+            slopeAngle = 90f;
+            return false;
         }
 
         private void OnDrawGizmosSelected()

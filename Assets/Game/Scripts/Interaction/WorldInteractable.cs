@@ -42,6 +42,17 @@ namespace RorType.Gameplay.Interaction
         [SerializeField, Min(1)] private int healthPurchaseCost = 20;
         [SerializeField, Min(1)] private int damageUpgradeCost = 1000;
         [SerializeField, Min(0f)] private float pickupDisappearDelay = 0.7f;
+        [Header("Container Drops")]
+        [SerializeField] private ResourcePickupCollectible containerMoneyPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible containerAmmoPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible containerHealthPickupPrefab;
+        [SerializeField, Min(0)] private int containerMoneyPickupCount = 10;
+        [SerializeField, Min(1)] private int containerMoneyPerPickup = 10;
+        [SerializeField, Min(0)] private int containerAmmoPickupCount = 5;
+        [SerializeField, Min(1)] private int containerAmmoPerPickup = 10;
+        [SerializeField, Range(0f, 1f)] private float containerHealthDropChance = 0.6f;
+        [SerializeField, Min(1)] private int containerHealthAmount = 150;
+        [SerializeField, Min(0f)] private float containerDropLaunchSpeed = 4.2f;
 
         private const float DefaultFeedbackDuration = 1.2f;
         private const int DefaultAmmoPurchaseAmount = 1;
@@ -50,6 +61,13 @@ namespace RorType.Gameplay.Interaction
         private const int DefaultHealthPurchaseCost = 20;
         private const int DefaultDamageUpgradeCost = 1000;
         private const float DefaultPickupDisappearDelay = 0.7f;
+        private const int DefaultContainerMoneyPickupCount = 10;
+        private const int DefaultContainerMoneyPerPickup = 10;
+        private const int DefaultContainerAmmoPickupCount = 5;
+        private const int DefaultContainerAmmoPerPickup = 10;
+        private const float DefaultContainerHealthDropChance = 0.6f;
+        private const int DefaultContainerHealthAmount = 150;
+        private const float DefaultContainerDropLaunchSpeed = 4.2f;
 
         private readonly HashSet<ScenePortalInteractionController> touchingInteractors = new();
         private Collider interactionTrigger;
@@ -128,20 +146,28 @@ namespace RorType.Gameplay.Interaction
                 return;
             }
 
-            var resources = interactor != null
-                ? interactor.GetComponent<PlayerResourceController>()
-                : null;
-
             ResolvePickupRewards(out var resolvedAmmoReward, out var resolvedMoneyReward);
-            if (resources != null)
+            var resolvedHealthReward = 0;
+            if (IsContainerDropResource())
             {
-                resources.AddMoney(resolvedMoneyReward);
-                resources.AddAmmo(resolvedAmmoReward);
+                SpawnContainerDrops(out resolvedMoneyReward, out resolvedAmmoReward, out resolvedHealthReward);
+            }
+            else
+            {
+                var resources = interactor != null
+                    ? interactor.GetComponent<PlayerResourceController>()
+                    : null;
+
+                if (resources != null)
+                {
+                    resources.AddMoney(resolvedMoneyReward);
+                    resources.AddAmmo(resolvedAmmoReward);
+                }
             }
 
             isCompleted = true;
             isCompleting = true;
-            currentFeedbackPrompt = FormatRewardText(resolvedMoneyReward, resolvedAmmoReward);
+            currentFeedbackPrompt = FormatRewardText(resolvedMoneyReward, resolvedAmmoReward, resolvedHealthReward);
             feedbackUntilTime = Time.time + feedbackDuration;
             FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, currentFeedbackPrompt, new Color(1f, 0.86f, 0.08f), 0.18f);
 
@@ -283,20 +309,91 @@ namespace RorType.Gameplay.Interaction
         {
             resolvedAmmoReward = Mathf.Max(0, ammoReward);
             resolvedMoneyReward = Mathf.Max(0, moneyReward);
+        }
 
+        private bool IsContainerDropResource()
+        {
             var objectName = name.ToLowerInvariant();
-            if (objectName.Contains("chest"))
+            return objectName.Contains("chest") || objectName.Contains("capsule");
+        }
+
+        private void SpawnContainerDrops(out int resolvedMoneyReward, out int resolvedAmmoReward, out int resolvedHealthReward)
+        {
+            var moneyCount = Mathf.Max(0, containerMoneyPickupCount);
+            var moneyAmount = Mathf.Max(1, containerMoneyPerPickup);
+            var ammoCount = Mathf.Max(0, containerAmmoPickupCount);
+            var ammoAmount = Mathf.Max(1, containerAmmoPerPickup);
+            var healthAmount = Mathf.Max(1, containerHealthAmount);
+            var dropHealth = Random.value < Mathf.Clamp01(containerHealthDropChance);
+            var totalDrops = moneyCount + ammoCount + (dropHealth ? 1 : 0);
+            var dropIndex = 0;
+            var origin = GetDropOrigin();
+            resolvedMoneyReward = 0;
+            resolvedAmmoReward = 0;
+            resolvedHealthReward = 0;
+
+            for (var i = 0; i < moneyCount; i++)
             {
-                resolvedAmmoReward = 0;
-                resolvedMoneyReward = 200;
-                return;
+                var pickup = ResourcePickupCollectible.Spawn(
+                    ResourcePickupCollectible.PickupKind.Money,
+                    containerMoneyPickupPrefab,
+                    moneyAmount,
+                    origin,
+                    ResolveContainerDropVelocity(dropIndex++, totalDrops));
+                resolvedMoneyReward += pickup != null ? pickup.Amount : moneyAmount;
             }
 
-            if (objectName.Contains("capsule"))
+            for (var i = 0; i < ammoCount; i++)
             {
-                resolvedAmmoReward = 100;
-                resolvedMoneyReward = 200;
+                var pickup = ResourcePickupCollectible.Spawn(
+                    ResourcePickupCollectible.PickupKind.Ammo,
+                    containerAmmoPickupPrefab,
+                    ammoAmount,
+                    origin,
+                    ResolveContainerDropVelocity(dropIndex++, totalDrops));
+                resolvedAmmoReward += pickup != null ? pickup.Amount : ammoAmount;
             }
+
+            if (dropHealth)
+            {
+                var pickup = ResourcePickupCollectible.Spawn(
+                    ResourcePickupCollectible.PickupKind.Health,
+                    containerHealthPickupPrefab,
+                    healthAmount,
+                    origin,
+                    ResolveContainerDropVelocity(dropIndex, totalDrops));
+                resolvedHealthReward += pickup != null ? pickup.Amount : healthAmount;
+            }
+        }
+
+        private Vector3 GetDropOrigin()
+        {
+            return interactionTrigger != null
+                ? interactionTrigger.bounds.center + Vector3.up * 0.35f
+                : transform.position + Vector3.up * 1.1f;
+        }
+
+        private Vector3 ResolveContainerDropVelocity(int dropIndex, int totalDrops)
+        {
+            Vector2 planarDirection;
+            if (totalDrops > 0)
+            {
+                var angle = ((Mathf.PI * 2f) / totalDrops) * dropIndex;
+                planarDirection = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+                planarDirection = (planarDirection + Random.insideUnitCircle * 0.35f).normalized;
+            }
+            else
+            {
+                planarDirection = Random.insideUnitCircle.normalized;
+            }
+
+            if (planarDirection.sqrMagnitude <= 0.0001f)
+            {
+                planarDirection = Vector2.right;
+            }
+
+            var launchSpeed = Mathf.Max(0f, containerDropLaunchSpeed);
+            return new Vector3(planarDirection.x, Random.Range(1.2f, 1.65f), planarDirection.y) * launchSpeed;
         }
 
         private ShopKind ResolveShopKind()
@@ -309,11 +406,26 @@ namespace RorType.Gameplay.Interaction
             return name.ToLowerInvariant().Contains("hammer") ? ShopKind.Blacksmith : ShopKind.Merchant;
         }
 
-        private static string FormatRewardText(int money, int ammo)
+        private static string FormatRewardText(int money, int ammo, int health)
         {
+            if (money > 0 && ammo > 0 && health > 0)
+            {
+                return $"+{money} gold  +{ammo} ammo  +{health} HP";
+            }
+
             if (money > 0 && ammo > 0)
             {
                 return $"+{money} gold  +{ammo} ammo";
+            }
+
+            if (money > 0 && health > 0)
+            {
+                return $"+{money} gold  +{health} HP";
+            }
+
+            if (ammo > 0 && health > 0)
+            {
+                return $"+{ammo} ammo  +{health} HP";
             }
 
             if (money > 0)
@@ -324,6 +436,11 @@ namespace RorType.Gameplay.Interaction
             if (ammo > 0)
             {
                 return $"+{ammo} ammo";
+            }
+
+            if (health > 0)
+            {
+                return $"+{health} HP";
             }
 
             return "+0";
@@ -451,6 +568,42 @@ namespace RorType.Gameplay.Interaction
             if (pickupDisappearDelay <= 0f)
             {
                 pickupDisappearDelay = DefaultPickupDisappearDelay;
+            }
+
+            if (containerMoneyPickupCount <= 0)
+            {
+                containerMoneyPickupCount = DefaultContainerMoneyPickupCount;
+            }
+
+            if (containerMoneyPerPickup <= 0)
+            {
+                containerMoneyPerPickup = DefaultContainerMoneyPerPickup;
+            }
+
+            if (containerAmmoPickupCount <= 0)
+            {
+                containerAmmoPickupCount = DefaultContainerAmmoPickupCount;
+            }
+
+            if (containerAmmoPerPickup <= 0)
+            {
+                containerAmmoPerPickup = DefaultContainerAmmoPerPickup;
+            }
+
+            containerHealthDropChance = Mathf.Clamp01(containerHealthDropChance);
+            if (containerHealthDropChance <= 0f)
+            {
+                containerHealthDropChance = DefaultContainerHealthDropChance;
+            }
+
+            if (containerHealthAmount <= 0)
+            {
+                containerHealthAmount = DefaultContainerHealthAmount;
+            }
+
+            if (containerDropLaunchSpeed <= 0f)
+            {
+                containerDropLaunchSpeed = DefaultContainerDropLaunchSpeed;
             }
         }
     }

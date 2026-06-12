@@ -1346,6 +1346,7 @@ MonoBehaviour:
   airControlPercent: 0.5
   extraFallGravity: 20
   groundSnapOffset: 0.02
+  groundedSlopeSnapDistance: 0.65
   visualPositionSharpness: 30
   jumpSpeed: 8
   jumpBufferTime: 0.12

@@ -100,7 +100,7 @@ namespace RorType.Gameplay.AI
             var backgroundRenderer = background.GetComponent<MeshRenderer>();
             if (backgroundRenderer != null)
             {
-                backgroundRenderer.material.color = healthBackgroundColor;
+                RuntimeRendererUtility.SetColor(backgroundRenderer, healthBackgroundColor);
             }
 
             var fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -116,7 +116,7 @@ namespace RorType.Gameplay.AI
             var fillRenderer = fill.GetComponent<MeshRenderer>();
             if (fillRenderer != null)
             {
-                fillRenderer.material.color = healthFillColor;
+                RuntimeRendererUtility.SetColor(fillRenderer, healthFillColor);
             }
 
             var healthTextObject = new GameObject("HealthText");
@@ -147,7 +147,6 @@ namespace RorType.Gameplay.AI
                 if (renderer != null)
                 {
                     renderer.sharedMaterial = builtInFont.material;
-                    renderer.material.color = color;
                 }
             }
         }

@@ -44,6 +44,18 @@ namespace RorType.Gameplay.Environment
             return true;
         }
 
+        public bool DestroyImmediately(in CombatHitInfo hitInfo)
+        {
+            if (!IsAlive)
+            {
+                return false;
+            }
+
+            health = 0f;
+            BreakApart(hitInfo.Direction, hitInfo.Impulse);
+            return true;
+        }
+
         private void BreakApart(Vector3 hitDirection, float impulse)
         {
             if (destroyed)

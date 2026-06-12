@@ -64,6 +64,7 @@ namespace RorType.Gameplay.Player
         public float DamageMultiplier => HasDamageUpgrade ? 2f : 1f;
         public CombatTeam Team => CombatTeam.Player;
         public bool IsAlive => Health > 0f;
+        public static PlayerResourceController ActivePlayer { get; private set; }
 
         public event Action<int> AmmoChanged;
         public event Action<int> MoneyChanged;
@@ -95,7 +96,16 @@ namespace RorType.Gameplay.Player
 
         private void OnEnable()
         {
+            ActivePlayer = this;
             PlayerStatusUiRuntime.Bind(this);
+        }
+
+        private void OnDisable()
+        {
+            if (ActivePlayer == this)
+            {
+                ActivePlayer = null;
+            }
         }
 
         private void Update()

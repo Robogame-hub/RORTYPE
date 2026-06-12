@@ -584,7 +584,7 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 - `Assets/Game/Scripts/UI/PlayerStatusUiRuntime.cs` creates a runtime bottom-right HUD showing ammo, two dash rectangles, and stamina.
 - `Assets/Game/Scripts/Interaction/WorldInteractable.cs` adds portal-style proximity interaction for non-portal objects, using the existing `ScenePortalInteractionController` and `PortalUiRuntime` prompt.
 - `Store` and `HAMMER` prefabs have root `SphereCollider` trigger interaction and show `Buy: press E` / `Bought` style prompt behavior configured with Russian prefab text.
-- `Chest` and `Capsule` prefabs have root `SphereCollider` trigger interaction. Chest grants `20` ammo, capsule grants `50` ammo, then disables its `MinimapTrackable` and trigger so it cannot be taken again.
+- `Chest` and `Capsule` prefabs have root `SphereCollider` trigger interaction. Opening either container now spawns physical resource pickups, then disables its `MinimapTrackable` and trigger so it cannot be taken again.
 
 ## Current economy, health, pickups, and destructibles on 2026-06-10
 
@@ -595,12 +595,12 @@ This section supersedes the older ammo-only chest/capsule description above.
 - Player HP damage values are: melee enemy `10`, shooter projectile `20`, enemy exploder explosion `30`.
 - `PlayerStatusUiRuntime` shows ammo/dashes/stamina/health in the bottom-right HUD and yellow outlined money text under the top-right minimap area. Ammo, money, and health changes give a short UI pulse.
 - Stamina and health bars explicitly scale their fill rects on X every frame, so bar depletion is visible even when the runtime-created UI images have no authored sprite.
-- `WorldInteractable` supports resource pickups and shop menus. Chests resolve to `200` gold. Capsules resolve to `200` gold plus `100` ammo. Pickup interaction shows floating reward text, disables the minimap marker and interaction trigger, then removes the world object after feedback.
+- `WorldInteractable` supports resource pickups and shop menus. Chests and capsules now drop physical `ResourcePickupCollectible` objects instead of adding resources directly: `10` money spheres/cubes worth `10` gold each, `5` ammo spheres/cubes worth `10` ammo each, plus at most one `150 HP` health pickup with `60%` chance. Pickup interaction shows floating reward text, disables the minimap marker and interaction trigger, then removes the world object after feedback.
 - `Store` opens a two-option merchant menu after pressing `E`: buy ammo (`1` gold for `1` ammo) or buy health (`20` gold for `20` HP).
 - `HAMMER` opens a blacksmith menu after pressing `E`: buy ammo or buy a one-time `x2` damage upgrade for `1000` gold.
-- Enemy death drops `1-3` resource pickups. Yellow random sphere/cube pickups give `2` gold. Shooter enemies can also drop red random sphere/cube pickups that give `1` ammo. All enemies can now also drop a red cross-shaped health pickup that restores `20 HP`. Enemy money, ammo, and health pickups magnetize to the player inside a horizontal `2m` radius.
+- Enemy death drops `1-3` resource pickups. Yellow random sphere/cube pickups give `2` gold. Shooter enemies can also drop red random sphere/cube pickups that give `1` ammo. All enemies can now also drop a red cross-shaped health pickup that restores `20 HP`. Enemy money, ammo, and health pickups magnetize to the player inside a horizontal `2m` radius and use trigger-only colliders so they are collectible without physically blocking or slowing the player.
 - `Assets/Game/Scripts/Environment/DestructibleCover.cs` and `Assets/Game/Prefabs/Environment/DestructibleCover.prefab` define a six-block destructible cover target with `15 HP`, `4m` width, and `2m` height. The cover's blocking visual is authored directly in the prefab as six child cube meshes/colliders, and the prefab includes a minimap trackable so it can be authored as a separate map point.
-- `Assets/Game/Scripts/Environment/ExplosiveBarrel.cs` and `Assets/Game/Prefabs/Environment/ExplosiveBarrel.prefab` define a light-red explosive cylinder. The barrel's blocking visual/collider is authored directly in the prefab as a child `BarrelCylinder`; it explodes after three player hits, flashes red three times before detonation, and deals `3` damage to enemies and neutral destructible objects within `5m`.
+- `Assets/Game/Scripts/Environment/ExplosiveBarrel.cs` and `Assets/Game/Prefabs/Environment/ExplosiveBarrel.prefab` define a light-red explosive cylinder. The barrel's blocking visual/collider is authored directly in the prefab as a child `BarrelCylinder`; it explodes after three player hits, flashes red three times before detonation, deals `3` damage to enemies within `5m`, and immediately destroys `DestructibleCover` objects caught in the blast.
 - `TopDownPlayerMotor` grounded movement now performs a Rigidbody sweep before `MovePosition`, preventing direct grounded movement from pushing the player through wall colliders.
 
 ## Current economy/health follow-up on 2026-06-10
@@ -608,6 +608,29 @@ This section supersedes the older ammo-only chest/capsule description above.
 - Resource and shop scripts now normalize their runtime defaults in `Awake`, so older scene/prefab instances with missing serialized fields still get valid money, health, stamina, and shop values.
 - `TopDownPlayer.prefab` and scene-local player instances explicitly serialize `maxMoney = 999999`, `maxHealth = 500`, `startingHealth = 500`, `maxStamina = 100`, `sprintDrainPerSecond = 10`, and `wallSkinWidth = 0.05` where applicable.
 - `PlayerStatusUiRuntime` uses a `1920 x 1080` reference resolution and sorting order `1000`; the money label is yellow with black outline and anchored below the top-right minimap.
-- `Chest.prefab`, `Capsule.prefab`, `Store.prefab`, and `HAMMER.prefab` explicitly serialize the accepted economy values: chest `200` gold; capsule `200` gold + `100` ammo; merchant ammo/health purchases; blacksmith ammo and one-time `1000` gold damage upgrade.
+- `Chest.prefab`, `Capsule.prefab`, `Store.prefab`, and `HAMMER.prefab` explicitly serialize the accepted economy/shop behavior. Chest and capsule resource rewards are now governed by `WorldInteractable` container drop defaults: `10 x 10` gold pickups, `5 x 10` ammo pickups, and one optional `150 HP` pickup at `60%` chance. Merchant and blacksmith purchase values remain inspector-driven, including the one-time `1000` gold damage upgrade.
 - `Level_1.unity` contains manually placed test instances near the player start for `DestructibleCover` and two `ExplosiveBarrel` objects.
 - The wall collision fix is now stronger than the earlier Rigidbody sweep: grounded movement performs a capsule cast and a penetration correction pass before `MovePosition`.
+
+## Current runtime cleanup and FPS stability implementation on 2026-06-12
+
+- `Assets/Game/Scripts/Combat/RuntimeRendererUtility.cs` colors runtime renderers through `MaterialPropertyBlock`, avoiding hidden per-object material instances from `renderer.material`.
+- `Assets/Game/Scripts/Combat/CombatRuntimeBudget.cs` caps temporary combat objects: player projectiles, enemy projectiles, resource pickups, floating texts, and explosion effects. When a category exceeds its cap, the oldest live object is destroyed.
+- Player/enemy projectiles, resource pickups, floating combat text, and explosion scale effects register themselves with the runtime budget as soon as they are initialized.
+- `EnemyCapsuleController` maintains an active-enemy registry and reuses a shared collider buffer when setting up enemy projectile collision ignores. This replaces a per-shot global `FindObjectsByType<EnemyCapsuleController>()` scan.
+- `PlayerResourceController.ActivePlayer` exposes the current scene-local player resources to lightweight runtime systems. Pickup magnetization and enemy target resolution use it instead of searching the scene every frame.
+
+## Current player ramp locomotion implementation on 2026-06-12
+
+- `TopDownPlayerMotor` no longer moves grounded players across ramps by using only the old ground point under the current position.
+- During grounded movement it samples stable ground at the intended next body position and snaps the body height to that surface before `Rigidbody.MovePosition`.
+- Grounded collision casts still protect against walls, but hits with normals inside `TopDownGroundProbe.maxSlopeAngle` are treated as walkable surfaces rather than blockers.
+- `groundedSlopeSnapDistance = 0.65` is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`, so descending ramps remains grounded instead of flickering into falling.
+
+## Current pickup prefab implementation on 2026-06-12
+
+- Resource pickup drops are prefab-backed through `Assets/Game/Resources/ResourcePickups/`.
+- Standard pickup prefabs are `GoldPickup`, `AmmoCubePickup`, `AmmoSpherePickup`, and `HealthPickup`.
+- The per-item nominal is configured on each prefab's `ResourcePickupCollectible.amount`: gold `10`, ammo cube/sphere `10`, health `150`.
+- Enemy drops and chest/capsule drops resolve these prefabs automatically from `Resources`; explicit serialized prefab fields on enemies/containers can override the standard prefabs.
+- Older missing-prefab setups keep a runtime primitive fallback, but the accepted workflow is to tune item values on the pickup prefabs.

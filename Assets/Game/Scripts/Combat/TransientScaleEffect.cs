@@ -16,6 +16,7 @@ namespace RorType.Gameplay.Combat
             lifetime = Mathf.Max(0.01f, durationSeconds);
             age = 0f;
             transform.localScale = startScale;
+            CombatRuntimeBudget.Register(gameObject, CombatRuntimeObjectKind.ExplosionEffect);
         }
 
         private void Update()

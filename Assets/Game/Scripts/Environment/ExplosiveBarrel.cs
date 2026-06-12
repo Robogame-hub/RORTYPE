@@ -20,7 +20,6 @@ namespace RorType.Gameplay.Environment
         private Collider barrelCollider;
         private int hitCount;
         private bool exploding;
-        private Material runtimeMaterial;
         private readonly Collider[] overlapBuffer = new Collider[32];
         private readonly Component[] uniqueDamageables = new Component[32];
 
@@ -126,13 +125,21 @@ namespace RorType.Gameplay.Environment
                     hitDirection = transform.forward;
                 }
 
-                damageable.ReceiveHit(new CombatHitInfo(
+                var explosionHit = new CombatHitInfo(
                     explosionDamage,
                     hitPoint,
                     hitDirection,
                     0f,
                     gameObject,
-                    CombatTeam.Neutral));
+                    CombatTeam.Neutral);
+
+                if (damageable is DestructibleCover destructibleCover)
+                {
+                    destructibleCover.DestroyImmediately(explosionHit);
+                    continue;
+                }
+
+                damageable.ReceiveHit(explosionHit);
             }
 
             for (var i = 0; i < hitCount && i < overlapBuffer.Length; i++)
@@ -173,7 +180,7 @@ namespace RorType.Gameplay.Environment
             var renderer = explosion.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = warningColor;
+                RuntimeRendererUtility.SetColor(renderer, warningColor);
             }
 
             var effect = explosion.AddComponent<TransientScaleEffect>();
@@ -199,12 +206,7 @@ namespace RorType.Gameplay.Environment
                 return;
             }
 
-            if (runtimeMaterial == null)
-            {
-                runtimeMaterial = visualRenderer.material;
-            }
-
-            runtimeMaterial.color = color;
+            RuntimeRendererUtility.SetColor(visualRenderer, color);
         }
 
         private void OnValidate()

@@ -430,15 +430,43 @@
 ## 2026-06-12 explosive barrel target note
 
 - `ExplosiveBarrel` explosion damage now targets both `CombatTeam.Enemy` and `CombatTeam.Neutral` damageables, excluding the exploding barrel itself. This lets barrel explosions damage `DestructibleCover` while still excluding the player.
+- `ExplosiveBarrel` now destroys `DestructibleCover` immediately on explosion instead of applying only its normal `3` enemy damage, so explosive barrels reliably clear destructible cover in one detonation.
 
 ## 2026-06-12 pickup magnet and health drop note
 
 - `ResourcePickupCollectible` now supports `PickupKind.Health` in addition to money and ammo. Health pickups are red cross-shaped pickups built from two rectangular cube bars and restore `20 HP` by default from enemy drops.
 - Enemy resource drops now roll health first with `healthDropChance = 0.2`; if health does not drop, shooter enemies can still drop ammo by `shooterAmmoDropChance`, otherwise the drop is money.
 - Money, ammo, and health enemy pickups now magnetize toward the player within a horizontal `2m` radius, then collect through the same reward path as trigger contact.
+- Enemy resource pickup colliders are trigger-only, including primitive money/ammo colliders, health cross child colliders, and the collection sphere, so drops collect/magnetize without becoming physical obstacles for the player.
 
 ## 2026-06-12 movement smoothing note
 
 - Player and enemy visible meshes now keep their own smoothed render-world position instead of lerping from a child transform after the physics/nav parent has already stepped. This prevents the visual sphere/capsule from inheriting one-frame root jumps before smoothing.
 - `TopDownCameraRig` follows `TopDownPlayerMotor.RenderPosition` when the target is the player, so camera motion is based on the smoothed visual position rather than the discrete physics root.
 - `EnemyCapsuleController` nav decisions and visual rotation now tick in `Update` with `Time.deltaTime`; the player facing/attack visual layer also rotates in `Update`. Player Rigidbody locomotion remains in `FixedUpdate` to keep collision resolution stable.
+
+## 2026-06-12 runtime cleanup and FPS stability note
+
+- Runtime combat visuals and pickups now use `RuntimeRendererUtility` with `MaterialPropertyBlock`; gameplay scripts should not color temporary primitives through `renderer.material`, because that creates per-object material instances and can grow memory during long sessions.
+- `CombatRuntimeBudget` caps short-lived combat objects: player projectiles, enemy projectiles, resource pickups, floating text, and explosion effects. New temporary combat systems should register their objects with this budget instead of relying only on lifetime timers.
+- `EnemyCapsuleController` keeps a static active-enemy registry and reuses a collider buffer when configuring enemy projectile ignores, replacing the previous per-shot `FindObjectsByType<EnemyCapsuleController>()` scan.
+- `PlayerResourceController.ActivePlayer` is the accepted scene-local player lookup for lightweight runtime systems such as pickup magnetization and enemy target resolution; these systems should not scan the scene every frame.
+
+## 2026-06-12 player ramp locomotion note
+
+- `TopDownPlayerMotor` grounded movement now samples stable ground at the intended next position before `MovePosition`, so ramps/elevated paths adjust player height from the upcoming surface instead of reusing the old ground point under the player.
+- Grounded capsule casts ignore collider hits whose normals are within `TopDownGroundProbe.maxSlopeAngle`; walkable ramps should no longer be treated as wall blockers.
+- Player prefab and scene-local player instances in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` serialize `groundedSlopeSnapDistance = 0.65` for smoother ramp descent while keeping wall collision handling active.
+
+## 2026-06-12 chest and capsule loot drop note
+
+- `Chest` and `Capsule` resource interactions no longer add money/ammo directly to `PlayerResourceController`.
+- Opening either container now spawns physical `ResourcePickupCollectible` drops: `10` random money spheres/cubes worth `10` gold each, `5` random ammo spheres/cubes worth `10` ammo each, and at most one health pickup worth `150 HP`.
+- The container health pickup rolls independently with `60%` chance; if it fails, no health pickup is spawned.
+
+## 2026-06-12 pickup prefab note
+
+- Resource pickups are now prefab-backed through `Assets/Game/Resources/ResourcePickups/`.
+- Standard pickup prefabs are `GoldPickup`, `AmmoCubePickup`, `AmmoSpherePickup`, and `HealthPickup`; each owns its collectible nominal through `ResourcePickupCollectible.amount`.
+- Accepted default nominal per picked item is: gold `10`, ammo cube/sphere `10`, health `150`.
+- Enemy drops and chest/capsule drops use these prefab-backed pickups by default, while older missing-prefab setups retain a runtime primitive fallback.

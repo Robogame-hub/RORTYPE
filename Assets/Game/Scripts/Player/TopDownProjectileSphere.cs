@@ -87,6 +87,8 @@ namespace RorType.Gameplay.Player
 
             age = 0f;
             isInitialized = true;
+            isConsumed = false;
+            CombatRuntimeBudget.Register(gameObject, CombatRuntimeObjectKind.PlayerProjectile);
         }
 
         private void OnCollisionEnter(Collision collision)

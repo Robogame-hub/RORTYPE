@@ -22,6 +22,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Range(0f, 1f)] private float airControlPercent = 0.5f;
         [SerializeField, Min(0f)] private float extraFallGravity = 20f;
         [SerializeField, Min(0f)] private float groundSnapOffset = 0.02f;
+        [SerializeField, Min(0f)] private float groundedSlopeSnapDistance = 0.65f;
         [SerializeField, Min(0f)] private float wallSkinWidth = 0.05f;
         [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
 
@@ -177,10 +178,13 @@ namespace RorType.Gameplay.Player
             if (useGroundSnap)
             {
                 var currentPosition = body.position;
-                var targetPosition = currentPosition + (combinedPlanarVelocity * Time.fixedDeltaTime);
-                targetPosition.y = ResolveGroundedBodyPositionY();
+                var groundedStep = combinedPlanarVelocity * Time.fixedDeltaTime;
+                groundedStep.y = 0f;
+                var targetPosition = ResolveGroundedTargetPosition(currentPosition + groundedStep);
                 targetPosition = ResolveCollisionAwareGroundedPosition(currentPosition, targetPosition);
+                targetPosition = ResolveGroundedTargetPosition(targetPosition);
                 targetPosition = ResolvePenetrationFreePosition(targetPosition);
+                targetPosition = ResolveGroundedTargetPosition(targetPosition);
                 var resolvedPlanarDelta = targetPosition - currentPosition;
                 resolvedPlanarDelta.y = 0f;
                 planarVelocity = Time.fixedDeltaTime > 0f
@@ -286,29 +290,50 @@ namespace RorType.Gameplay.Player
             dashDuration = Mathf.Max(0.01f, dashDuration);
             maxDashCharges = Mathf.Max(1, maxDashCharges);
             dashChargeRecoveryTime = Mathf.Max(0.01f, dashChargeRecoveryTime);
+            groundedSlopeSnapDistance = Mathf.Max(0f, groundedSlopeSnapDistance);
             wallSkinWidth = Mathf.Max(0f, wallSkinWidth);
         }
 
         private float ResolveGroundedBodyPositionY()
         {
+            return ResolveGroundedBodyPositionY(groundProbe.GroundPoint);
+        }
+
+        private float ResolveGroundedBodyPositionY(Vector3 groundPoint)
+        {
             var lossyScale = transform.lossyScale;
             var halfHeight = capsuleCollider.height * Mathf.Abs(lossyScale.y) * 0.5f;
             var centerOffset = capsuleCollider.center.y * Mathf.Abs(lossyScale.y);
             var bottomToPivot = halfHeight - centerOffset;
-            return groundProbe.GroundPoint.y + bottomToPivot + groundSnapOffset;
+            return groundPoint.y + bottomToPivot + groundSnapOffset;
+        }
+
+        private Vector3 ResolveGroundedTargetPosition(Vector3 targetPosition)
+        {
+            if (groundProbe.TrySampleStableGround(
+                    targetPosition,
+                    groundedSlopeSnapDistance,
+                    out var sampledGroundPoint,
+                    out _))
+            {
+                targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+                return targetPosition;
+            }
+
+            targetPosition.y = ResolveGroundedBodyPositionY();
+            return targetPosition;
         }
 
         private Vector3 ResolveCollisionAwareGroundedPosition(Vector3 currentPosition, Vector3 targetPosition)
         {
-            var planarDelta = targetPosition - currentPosition;
-            planarDelta.y = 0f;
-            var distance = planarDelta.magnitude;
+            var movementDelta = targetPosition - currentPosition;
+            var distance = movementDelta.magnitude;
             if (distance <= 0.0001f || body == null)
             {
                 return targetPosition;
             }
 
-            var direction = planarDelta / distance;
+            var direction = movementDelta / distance;
             if (!TryGetMovementBlocker(currentPosition, direction, distance + wallSkinWidth, out var hit))
             {
                 return targetPosition;
@@ -347,6 +372,12 @@ namespace RorType.Gameplay.Player
                 movementCastHits[i] = default;
 
                 if (candidate.collider == null || candidate.collider.transform.root == transform.root)
+                {
+                    continue;
+                }
+
+                if (groundProbe.IsGroundCollider(candidate.collider)
+                    && groundProbe.IsStableSurfaceNormal(candidate.normal))
                 {
                     continue;
                 }

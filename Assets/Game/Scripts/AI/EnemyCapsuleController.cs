@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using RorType.Gameplay.Combat;
 using RorType.Gameplay.Interaction;
 using RorType.Gameplay.Player;
@@ -23,6 +24,8 @@ namespace RorType.Gameplay.AI
         private const float DefaultExplosionDamageRadius = 2f;
         private const float DefaultExplosionDamage = 30f;
         private const int ExplosionHitBufferSize = 16;
+        private static readonly List<EnemyCapsuleController> ActiveEnemies = new();
+        private static readonly List<Collider> SharedColliderBuffer = new();
 
         [Header("Identity")]
         [SerializeField] private EnemyCapsuleArchetype archetype = EnemyCapsuleArchetype.Shooter;
@@ -102,9 +105,12 @@ namespace RorType.Gameplay.AI
         [Header("Drops")]
         [SerializeField, Min(0)] private int minResourceDrops = 1;
         [SerializeField, Min(0)] private int maxResourceDrops = 3;
-        [SerializeField, Min(1)] private int moneyPerPickup = 2;
-        [SerializeField, Min(1)] private int ammoPerPickup = 1;
-        [SerializeField, Min(1)] private int healthPerPickup = 20;
+        [SerializeField] private ResourcePickupCollectible moneyPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible ammoPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible healthPickupPrefab;
+        [SerializeField, Min(1)] private int moneyPerPickup = 10;
+        [SerializeField, Min(1)] private int ammoPerPickup = 10;
+        [SerializeField, Min(1)] private int healthPerPickup = 150;
         [SerializeField, Range(0f, 1f)] private float healthDropChance = 0.2f;
         [SerializeField, Range(0f, 1f)] private float shooterAmmoDropChance = 0.45f;
         [SerializeField, Min(0.1f)] private float dropLaunchSpeed = 3.2f;
@@ -114,7 +120,6 @@ namespace RorType.Gameplay.AI
         private NavMeshAgent navMeshAgent;
         private Transform target;
         private TopDownPlayerMotor playerMotor;
-        private Material runtimeMaterialInstance;
         private Vector3 feedbackBaseLocalScale = Vector3.one;
         private Vector3 patrolAnchor;
         private readonly Vector3[] patrolPoints = new Vector3[2];
@@ -183,7 +188,6 @@ namespace RorType.Gameplay.AI
             CacheVisualBasePose();
 
             ConfigureNavMeshAgent();
-            InitializeMaterialInstance();
 
             currentHealth = maxHealth;
             patrolAnchor = transform.position;
@@ -195,6 +199,19 @@ namespace RorType.Gameplay.AI
                 EnsureMeleeFistsInitialized();
                 UpdateMeleeFistVisuals();
             }
+        }
+
+        private void OnEnable()
+        {
+            if (!ActiveEnemies.Contains(this))
+            {
+                ActiveEnemies.Add(this);
+            }
+        }
+
+        private void OnDisable()
+        {
+            ActiveEnemies.Remove(this);
         }
 
         private void Start()
@@ -500,7 +517,7 @@ namespace RorType.Gameplay.AI
 
             if (projectileRenderer != null)
             {
-                projectileRenderer.material.color = shooterProjectileColor;
+                RuntimeRendererUtility.SetColor(projectileRenderer, shooterProjectileColor);
             }
 
             IgnoreOwnCollisions(projectileCollider);
@@ -566,7 +583,7 @@ namespace RorType.Gameplay.AI
             var renderer = explosion.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material.color = explodeWarningColor;
+                RuntimeRendererUtility.SetColor(renderer, explodeWarningColor);
             }
 
             var effect = explosion.AddComponent<TransientScaleEffect>();
@@ -812,7 +829,8 @@ namespace RorType.Gameplay.AI
 
         private void ResolveTarget()
         {
-            playerMotor = Object.FindFirstObjectByType<TopDownPlayerMotor>();
+            var activePlayer = PlayerResourceController.ActivePlayer;
+            playerMotor = activePlayer != null ? activePlayer.GetComponent<TopDownPlayerMotor>() : null;
             target = playerMotor != null ? playerMotor.transform : null;
         }
 
@@ -927,9 +945,23 @@ namespace RorType.Gameplay.AI
                 var launchVelocity = new Vector3(planarDirection.x, 1.6f, planarDirection.y) * dropLaunchSpeed;
                 ResourcePickupCollectible.Spawn(
                     pickupKind,
+                    ResolveDropPrefab(pickupKind),
                     amount,
                     origin + new Vector3(0f, 0.35f, 0f),
                     launchVelocity);
+            }
+        }
+
+        private ResourcePickupCollectible ResolveDropPrefab(ResourcePickupCollectible.PickupKind pickupKind)
+        {
+            switch (pickupKind)
+            {
+                case ResourcePickupCollectible.PickupKind.Health:
+                    return healthPickupPrefab;
+                case ResourcePickupCollectible.PickupKind.Ammo:
+                    return ammoPickupPrefab;
+                default:
+                    return moneyPickupPrefab;
             }
         }
 
@@ -1024,16 +1056,6 @@ namespace RorType.Gameplay.AI
                 1f - (bounceSideScale * reboundStrength));
         }
 
-        private void InitializeMaterialInstance()
-        {
-            if (visualRenderer == null)
-            {
-                return;
-            }
-
-            runtimeMaterialInstance = visualRenderer.material;
-        }
-
         private void ApplyRestingColor()
         {
             SetVisualColor(baseColor);
@@ -1041,10 +1063,7 @@ namespace RorType.Gameplay.AI
 
         private void SetVisualColor(Color color)
         {
-            if (runtimeMaterialInstance != null)
-            {
-                runtimeMaterialInstance.color = color;
-            }
+            RuntimeRendererUtility.SetColor(visualRenderer, color);
         }
 
         private void CacheVisualBasePose()
@@ -1132,19 +1151,20 @@ namespace RorType.Gameplay.AI
                 return;
             }
 
-            var enemies = Object.FindObjectsByType<EnemyCapsuleController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
-            for (var enemyIndex = 0; enemyIndex < enemies.Length; enemyIndex++)
+            for (var enemyIndex = ActiveEnemies.Count - 1; enemyIndex >= 0; enemyIndex--)
             {
-                var enemy = enemies[enemyIndex];
+                var enemy = ActiveEnemies[enemyIndex];
                 if (enemy == null)
                 {
+                    ActiveEnemies.RemoveAt(enemyIndex);
                     continue;
                 }
 
-                var enemyColliders = enemy.GetComponentsInChildren<Collider>();
-                for (var colliderIndex = 0; colliderIndex < enemyColliders.Length; colliderIndex++)
+                SharedColliderBuffer.Clear();
+                enemy.GetComponentsInChildren(false, SharedColliderBuffer);
+                for (var colliderIndex = 0; colliderIndex < SharedColliderBuffer.Count; colliderIndex++)
                 {
-                    var enemyCollider = enemyColliders[colliderIndex];
+                    var enemyCollider = SharedColliderBuffer[colliderIndex];
                     if (enemyCollider == null || enemyCollider == projectileCollider)
                     {
                         continue;
@@ -1153,6 +1173,8 @@ namespace RorType.Gameplay.AI
                     Physics.IgnoreCollision(projectileCollider, enemyCollider, true);
                 }
             }
+
+            SharedColliderBuffer.Clear();
         }
 
         private void TriggerMeleePunch(int fistIndex)
@@ -1242,7 +1264,7 @@ namespace RorType.Gameplay.AI
             var fistRenderer = fist.GetComponent<Renderer>();
             if (fistRenderer != null)
             {
-                fistRenderer.material.color = meleeFistColor;
+                RuntimeRendererUtility.SetColor(fistRenderer, meleeFistColor);
             }
 
             return fist.transform;

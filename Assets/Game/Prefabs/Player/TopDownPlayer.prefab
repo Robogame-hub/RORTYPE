@@ -217,6 +217,7 @@ MonoBehaviour:
   airControlPercent: 0.5
   extraFallGravity: 20
   groundSnapOffset: 0.02
+  groundedSlopeSnapDistance: 0.65
   wallSkinWidth: 0.05
   visualPositionSharpness: 30
   jumpSpeed: 8

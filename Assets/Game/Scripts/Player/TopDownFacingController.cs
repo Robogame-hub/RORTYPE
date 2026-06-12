@@ -259,7 +259,7 @@ namespace RorType.Gameplay.Player
 
             if (projectileRenderer != null)
             {
-                projectileRenderer.material.color = projectileColor;
+                RuntimeRendererUtility.SetColor(projectileRenderer, projectileColor);
             }
 
             IgnorePlayerCollisions(projectileCollider);
@@ -378,7 +378,7 @@ namespace RorType.Gameplay.Player
             var fistRenderer = fist.GetComponent<Renderer>();
             if (fistRenderer != null)
             {
-                fistRenderer.material.color = meleeFistColor;
+                RuntimeRendererUtility.SetColor(fistRenderer, meleeFistColor);
             }
 
             return fist.transform;
