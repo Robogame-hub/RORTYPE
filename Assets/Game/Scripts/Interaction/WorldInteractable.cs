@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using RorType.Gameplay.Combat;
@@ -23,6 +24,76 @@ namespace RorType.Gameplay.Interaction
             Blacksmith = 2
         }
 
+        public enum ShopItemType
+        {
+            Ammo = 0,
+            Health = 1,
+            FullHeal = 2,
+            ShieldUnlock = 3,
+            ShieldRestore = 4,
+            ShieldUpgrade = 5,
+            MaxHealthUpgrade = 6,
+            DamageUpgrade = 7,
+            ExtraDashCharge = 8
+        }
+
+        [Serializable]
+        private sealed class ShopItem
+        {
+            [SerializeField] private ShopItemType itemType;
+            [SerializeField] private string displayName;
+            [SerializeField, Min(0)] private int cost = 1;
+            [SerializeField, Min(0)] private int amount = 1;
+            [SerializeField] private bool repeatWhileHeld;
+            [SerializeField] private bool hideWhenUnavailable = true;
+
+            public ShopItemType ItemType => itemType;
+            public int Cost => Mathf.Max(0, cost);
+            public int Amount => Mathf.Max(0, amount);
+            public bool RepeatWhileHeld => repeatWhileHeld;
+            public bool HideWhenUnavailable => hideWhenUnavailable;
+
+            public ShopItem(
+                ShopItemType itemType,
+                string displayName,
+                int cost,
+                int amount,
+                bool repeatWhileHeld,
+                bool hideWhenUnavailable = true)
+            {
+                this.itemType = itemType;
+                this.displayName = displayName;
+                this.cost = cost;
+                this.amount = amount;
+                this.repeatWhileHeld = repeatWhileHeld;
+                this.hideWhenUnavailable = hideWhenUnavailable;
+            }
+
+            public string GetDisplayName()
+            {
+                return string.IsNullOrWhiteSpace(displayName)
+                    ? ResolveDefaultName(itemType)
+                    : displayName;
+            }
+
+            private static string ResolveDefaultName(ShopItemType itemType)
+            {
+                return itemType switch
+                {
+                    ShopItemType.Ammo => "\u041F\u0430\u0442\u0440\u043E\u043D\u044B",
+                    ShopItemType.Health => "\u041B\u0435\u0447\u0435\u043D\u0438\u0435",
+                    ShopItemType.FullHeal => "\u041F\u043E\u043B\u043D\u043E\u0435 \u043B\u0435\u0447\u0435\u043D\u0438\u0435",
+                    ShopItemType.ShieldUnlock => "\u0429\u0438\u0442",
+                    ShopItemType.ShieldRestore => "\u0412\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u0438\u0442\u044C \u0449\u0438\u0442",
+                    ShopItemType.ShieldUpgrade => "\u0423\u0441\u0438\u043B\u0435\u043D\u0438\u0435 \u0449\u0438\u0442\u0430",
+                    ShopItemType.MaxHealthUpgrade => "\u0423\u0441\u0438\u043B\u0435\u043D\u0438\u0435 HP",
+                    ShopItemType.DamageUpgrade => "\u0423\u0441\u0438\u043B\u0438\u0442\u044C \u0443\u0440\u043E\u043D",
+                    ShopItemType.ExtraDashCharge => "\u0414\u043E\u043F. \u0440\u044B\u0432\u043E\u043A",
+                    _ => "\u0422\u043E\u0432\u0430\u0440"
+                };
+            }
+        }
+
         private static readonly List<WorldInteractable> RegisteredInteractables = new();
 
         [SerializeField] private InteractionMode mode = InteractionMode.Purchase;
@@ -41,6 +112,8 @@ namespace RorType.Gameplay.Interaction
         [SerializeField, Min(1)] private int healthPurchaseAmount = 20;
         [SerializeField, Min(1)] private int healthPurchaseCost = 20;
         [SerializeField, Min(1)] private int damageUpgradeCost = 1000;
+        [Header("Shop Items")]
+        [SerializeField] private List<ShopItem> shopItems = new();
         [SerializeField, Min(0f)] private float pickupDisappearDelay = 0.7f;
         [Header("Container Drops")]
         [SerializeField] private ResourcePickupCollectible containerMoneyPickupPrefab;
@@ -199,94 +272,370 @@ namespace RorType.Gameplay.Interaction
                 return;
             }
 
-            if (ResolveShopKind() == ShopKind.Blacksmith)
+            var title = ResolveShopKind() == ShopKind.Blacksmith
+                ? "\u041A\u0443\u0437\u043D\u0435\u0446"
+                : "\u0422\u043E\u0440\u0433\u043E\u0432\u0435\u0446";
+
+            var options = BuildShopOptions(resources);
+            if (options.Count == 0)
             {
-                PortalUiRuntime.ShowChoice(
-                    "\u041A\u0443\u0437\u043D\u0435\u0446",
-                    new[]
-                    {
-                        new PortalUiRuntime.ChoiceOption(
-                            $"\u041A\u0443\u043F\u0438\u0442\u044C \u043F\u0430\u0442\u0440\u043E\u043D\u044B ({ammoPurchaseCost}: {ammoPurchaseAmount})",
-                            () => TryBuyAmmo(resources)),
-                        new PortalUiRuntime.ChoiceOption(
-                            resources.HasDamageUpgrade
-                                ? "\u0423\u0440\u043E\u043D \u0443\u0436\u0435 \u0443\u0441\u0438\u043B\u0435\u043D"
-                                : $"\u0423\u0441\u0438\u043B\u0438\u0442\u044C \u0443\u0440\u043E\u043D ({damageUpgradeCost})",
-                            () => TryBuyDamageUpgrade(resources))
-                    });
+                ShowShopFeedback("\u041D\u0435\u0442 \u0442\u043E\u0432\u0430\u0440\u043E\u0432");
                 return;
             }
 
-            PortalUiRuntime.ShowChoice(
-                "\u0422\u043E\u0440\u0433\u043E\u0432\u0435\u0446",
-                new[]
+            PortalUiRuntime.ShowChoice(title, options);
+        }
+
+        private List<PortalUiRuntime.ChoiceOption> BuildShopOptions(PlayerResourceController resources)
+        {
+            var options = new List<PortalUiRuntime.ChoiceOption>();
+            var items = ResolveShopItems();
+            for (var index = 0; index < items.Count; index++)
+            {
+                var item = items[index];
+                if (item == null)
                 {
-                    new PortalUiRuntime.ChoiceOption(
-                        $"\u041A\u0443\u043F\u0438\u0442\u044C \u043F\u0430\u0442\u0440\u043E\u043D\u044B ({ammoPurchaseCost}: {ammoPurchaseAmount})",
-                        () => TryBuyAmmo(resources)),
-                    new PortalUiRuntime.ChoiceOption(
-                        $"\u041A\u0443\u043F\u0438\u0442\u044C \u0437\u0434\u043E\u0440\u043E\u0432\u044C\u0435 ({healthPurchaseCost}: {healthPurchaseAmount})",
-                        () => TryBuyHealth(resources))
-                });
+                    continue;
+                }
+
+                if (!ShouldShowShopItem(resources, item))
+                {
+                    continue;
+                }
+
+                var label = FormatShopItemLabel(resources, item);
+                options.Add(new PortalUiRuntime.ChoiceOption(
+                    label,
+                    () => TryBuyShopItem(resources, item),
+                    item.RepeatWhileHeld));
+            }
+
+            return options;
         }
 
-        private void TryBuyAmmo(PlayerResourceController resources)
+        private IReadOnlyList<ShopItem> ResolveShopItems()
+        {
+            if (shopItems != null && shopItems.Count > 0)
+            {
+                return shopItems;
+            }
+
+            return ResolveShopKind() == ShopKind.Blacksmith
+                ? CreateFallbackBlacksmithItems()
+                : CreateFallbackMerchantItems();
+        }
+
+        private List<ShopItem> CreateFallbackMerchantItems()
+        {
+            return new List<ShopItem>
+            {
+                new(ShopItemType.Ammo, "\u041F\u0430\u0442\u0440\u043E\u043D\u044B", ammoPurchaseCost, ammoPurchaseAmount, true, false),
+                new(ShopItemType.Health, "\u041B\u0435\u0447\u0435\u043D\u0438\u0435", healthPurchaseCost, healthPurchaseAmount, true, false),
+                new(ShopItemType.FullHeal, "\u041F\u043E\u043B\u043D\u043E\u0435 \u043B\u0435\u0447\u0435\u043D\u0438\u0435", 500, 0, false, false),
+                new(ShopItemType.ShieldUnlock, "\u0414\u043E\u043F. \u0449\u0438\u0442", 1000, 100, false),
+                new(ShopItemType.ShieldRestore, "\u0412\u043E\u0441\u0441\u0442. \u0449\u0438\u0442", 100, 0, true)
+            };
+        }
+
+        private List<ShopItem> CreateFallbackBlacksmithItems()
+        {
+            return new List<ShopItem>
+            {
+                new(ShopItemType.Ammo, "\u041F\u0430\u0442\u0440\u043E\u043D\u044B", ammoPurchaseCost, ammoPurchaseAmount, true, false),
+                new(ShopItemType.ExtraDashCharge, "\u0414\u043E\u043F. \u0440\u044B\u0432\u043E\u043A", 1000, 1, false),
+                new(ShopItemType.DamageUpgrade, "\u0423\u0441\u0438\u043B\u0438\u0442\u044C \u0443\u0440\u043E\u043D", damageUpgradeCost, 0, false),
+                new(ShopItemType.ShieldUnlock, "\u0429\u0438\u0442", 1000, 100, false),
+                new(ShopItemType.ShieldUpgrade, "\u0429\u0438\u0442 +100", 500, 100, false),
+                new(ShopItemType.MaxHealthUpgrade, "HP +100", 500, 100, false)
+            };
+        }
+
+        private bool ShouldShowShopItem(PlayerResourceController resources, ShopItem item)
+        {
+            if (resources == null || item == null || !item.HideWhenUnavailable)
+            {
+                return true;
+            }
+
+            return item.ItemType switch
+            {
+                ShopItemType.ShieldUnlock => !resources.HasShield,
+                ShopItemType.ShieldRestore => resources.HasShield,
+                ShopItemType.ShieldUpgrade => resources.HasShield,
+                ShopItemType.DamageUpgrade => !resources.HasDamageUpgrade,
+                ShopItemType.ExtraDashCharge => !resources.HasExtraDashUpgrade,
+                _ => true
+            };
+        }
+
+        private static string FormatShopItemLabel(PlayerResourceController resources, ShopItem item)
+        {
+            var amount = item.Amount;
+            var valueText = item.ItemType switch
+            {
+                ShopItemType.Ammo => $"+{Mathf.Max(1, amount)}",
+                ShopItemType.Health => $"+{Mathf.Max(1, amount)} HP",
+                ShopItemType.ShieldUnlock => $"+{Mathf.Max(1, amount)}",
+                ShopItemType.ShieldUpgrade => $"+{Mathf.Max(1, amount)}",
+                ShopItemType.MaxHealthUpgrade => $"+{Mathf.Max(1, amount)} HP",
+                ShopItemType.FullHeal => resources != null ? $"{resources.Health:0}/{resources.MaxHealth:0} HP" : string.Empty,
+                ShopItemType.ShieldRestore => resources != null ? $"{resources.Shield:0}/{resources.MaxShield:0}" : string.Empty,
+                _ => string.Empty
+            };
+
+            return string.IsNullOrWhiteSpace(valueText)
+                ? $"{item.GetDisplayName()} ({item.Cost})"
+                : $"{item.GetDisplayName()} {valueText} ({item.Cost})";
+        }
+
+        private bool TryBuyShopItem(PlayerResourceController resources, ShopItem item)
+        {
+            if (resources == null || item == null)
+            {
+                return false;
+            }
+
+            var success = item.ItemType switch
+            {
+                ShopItemType.Ammo => TryBuyAmmo(resources, item.Cost, Mathf.Max(1, item.Amount)),
+                ShopItemType.Health => TryBuyHealth(resources, item.Cost, Mathf.Max(1, item.Amount)),
+                ShopItemType.FullHeal => TryBuyFullHeal(resources, item.Cost),
+                ShopItemType.ShieldUnlock => TryBuyShieldUnlock(resources, item.Cost, Mathf.Max(1, item.Amount)),
+                ShopItemType.ShieldRestore => TryBuyShieldRestore(resources, item.Cost),
+                ShopItemType.ShieldUpgrade => TryBuyShieldUpgrade(resources, item.Cost, Mathf.Max(1, item.Amount)),
+                ShopItemType.MaxHealthUpgrade => TryBuyMaxHealthUpgrade(resources, item.Cost, Mathf.Max(1, item.Amount)),
+                ShopItemType.DamageUpgrade => TryBuyDamageUpgrade(resources, item.Cost),
+                ShopItemType.ExtraDashCharge => TryBuyExtraDashUpgrade(resources, item.Cost),
+                _ => false
+            };
+
+            if (success && ShouldRefreshShopAfterPurchase(item))
+            {
+                var title = ResolveShopKind() == ShopKind.Blacksmith
+                    ? "\u041A\u0443\u0437\u043D\u0435\u0446"
+                    : "\u0422\u043E\u0440\u0433\u043E\u0432\u0435\u0446";
+                PortalUiRuntime.ShowChoice(title, BuildShopOptions(resources));
+            }
+
+            return success;
+        }
+
+        private static bool ShouldRefreshShopAfterPurchase(ShopItem item)
+        {
+            return item != null && item.ItemType is
+                ShopItemType.ShieldUnlock or
+                ShopItemType.DamageUpgrade or
+                ShopItemType.ExtraDashCharge;
+        }
+
+        private bool TryBuyAmmo(PlayerResourceController resources, int cost, int amount)
         {
             if (resources == null)
             {
-                return;
+                return false;
             }
 
-            if (!resources.TrySpendMoney(ammoPurchaseCost))
+            if (resources.Ammo >= resources.MaxAmmo)
+            {
+                ShowShopFeedback("\u041F\u0430\u0442\u0440\u043E\u043D\u044B \u043F\u043E\u043B\u043D\u044B\u0435");
+                return false;
+            }
+
+            if (!resources.TrySpendMoney(cost))
             {
                 ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
-                return;
+                return false;
             }
 
-            resources.AddAmmo(ammoPurchaseAmount);
-            ShowShopFeedback($"+{ammoPurchaseAmount} \u043F\u0430\u0442\u0440\u043E\u043D");
-            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{ammoPurchaseAmount} ammo", Color.red, 0.16f);
+            resources.AddAmmo(amount);
+            ShowShopFeedback($"+{amount} \u043F\u0430\u0442\u0440\u043E\u043D");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{amount} ammo", Color.red, 0.16f);
+            return true;
         }
 
-        private void TryBuyHealth(PlayerResourceController resources)
+        private bool TryBuyHealth(PlayerResourceController resources, int cost, int amount)
         {
             if (resources == null)
             {
-                return;
+                return false;
             }
 
-            if (!resources.TrySpendMoney(healthPurchaseCost))
+            if (resources.Health >= resources.MaxHealth)
+            {
+                ShowShopFeedback("HP \u043F\u043E\u043B\u043D\u043E\u0435");
+                return false;
+            }
+
+            if (!resources.TrySpendMoney(cost))
             {
                 ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
-                return;
+                return false;
             }
 
-            resources.AddHealth(healthPurchaseAmount);
-            ShowShopFeedback($"+{healthPurchaseAmount} HP");
-            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{healthPurchaseAmount} HP", Color.green, 0.16f);
+            resources.AddHealth(amount);
+            ShowShopFeedback($"+{amount} HP");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{amount} HP", Color.green, 0.16f);
+            return true;
         }
 
-        private void TryBuyDamageUpgrade(PlayerResourceController resources)
+        private bool TryBuyFullHeal(PlayerResourceController resources, int cost)
         {
             if (resources == null)
             {
-                return;
+                return false;
+            }
+
+            if (resources.Health >= resources.MaxHealth)
+            {
+                ShowShopFeedback("HP \u043F\u043E\u043B\u043D\u043E\u0435");
+                return false;
+            }
+
+            if (!resources.TrySpendMoney(cost))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            resources.FullHeal();
+            ShowShopFeedback("\u041F\u043E\u043B\u043D\u043E\u0435 HP");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, "Full HP", Color.green, 0.18f);
+            return true;
+        }
+
+        private bool TryBuyShieldUnlock(PlayerResourceController resources, int cost, int amount)
+        {
+            if (resources == null)
+            {
+                return false;
+            }
+
+            if (resources.HasShield)
+            {
+                ShowShopFeedback("\u0429\u0438\u0442 \u0443\u0436\u0435 \u043A\u0443\u043F\u043B\u0435\u043D");
+                return false;
+            }
+
+            if (!resources.TryPurchaseShieldUnlock(cost, amount))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            ShowShopFeedback($"+{amount} \u0449\u0438\u0442");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{amount} shield", new Color(0.35f, 0.75f, 1f), 0.18f);
+            return true;
+        }
+
+        private bool TryBuyShieldRestore(PlayerResourceController resources, int cost)
+        {
+            if (resources == null || !resources.HasShield)
+            {
+                ShowShopFeedback("\u0429\u0438\u0442 \u043D\u0435 \u043A\u0443\u043F\u043B\u0435\u043D");
+                return false;
+            }
+
+            if (resources.Shield >= resources.MaxShield)
+            {
+                ShowShopFeedback("\u0429\u0438\u0442 \u043F\u043E\u043B\u043D\u044B\u0439");
+                return false;
+            }
+
+            if (!resources.TrySpendMoney(cost))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            resources.RestoreShield();
+            ShowShopFeedback("\u0429\u0438\u0442 \u0432\u043E\u0441\u0441\u0442.");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, "Shield full", new Color(0.35f, 0.75f, 1f), 0.18f);
+            return true;
+        }
+
+        private bool TryBuyShieldUpgrade(PlayerResourceController resources, int cost, int amount)
+        {
+            if (resources == null || !resources.HasShield)
+            {
+                ShowShopFeedback("\u0429\u0438\u0442 \u043D\u0435 \u043A\u0443\u043F\u043B\u0435\u043D");
+                return false;
+            }
+
+            if (!resources.TryPurchaseShieldUpgrade(cost, amount))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            ShowShopFeedback($"+{amount} \u0449\u0438\u0442");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{amount} shield", new Color(0.35f, 0.75f, 1f), 0.18f);
+            return true;
+        }
+
+        private bool TryBuyMaxHealthUpgrade(PlayerResourceController resources, int cost, int amount)
+        {
+            if (resources == null)
+            {
+                return false;
+            }
+
+            if (!resources.TryPurchaseHealthUpgrade(cost, amount))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            ShowShopFeedback($"+{amount} max HP");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, $"+{amount} max HP", Color.green, 0.18f);
+            return true;
+        }
+
+        private bool TryBuyDamageUpgrade(PlayerResourceController resources, int cost)
+        {
+            if (resources == null)
+            {
+                return false;
             }
 
             if (resources.HasDamageUpgrade)
             {
                 ShowShopFeedback("\u0423\u0441\u0438\u043B\u0435\u043D\u0438\u0435 \u0443\u0436\u0435 \u043A\u0443\u043F\u043B\u0435\u043D\u043E");
-                return;
+                return false;
             }
 
-            if (!resources.TryPurchaseDamageUpgrade(damageUpgradeCost))
+            if (!resources.TryPurchaseDamageUpgrade(cost))
             {
                 ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
-                return;
+                return false;
             }
 
             ShowShopFeedback("x2 \u0443\u0440\u043E\u043D");
             FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, "Damage x2", new Color(1f, 0.86f, 0.08f), 0.18f);
+            return true;
+        }
+
+        private bool TryBuyExtraDashUpgrade(PlayerResourceController resources, int cost)
+        {
+            if (resources == null)
+            {
+                return false;
+            }
+
+            if (resources.HasExtraDashUpgrade)
+            {
+                ShowShopFeedback("\u0420\u044B\u0432\u043E\u043A \u0443\u0436\u0435 \u043A\u0443\u043F\u043B\u0435\u043D");
+                return false;
+            }
+
+            if (!resources.TryPurchaseExtraDashUpgrade(cost))
+            {
+                ShowShopFeedback("\u041D\u0435 \u0445\u0432\u0430\u0442\u0430\u0435\u0442 \u0437\u043E\u043B\u043E\u0442\u0430");
+                return false;
+            }
+
+            ShowShopFeedback("+1 \u0440\u044B\u0432\u043E\u043A");
+            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.2f, "+1 dash", new Color(0.18f, 0.75f, 1f), 0.18f);
+            return true;
         }
 
         private void ShowShopFeedback(string message)
@@ -324,7 +673,7 @@ namespace RorType.Gameplay.Interaction
             var ammoCount = Mathf.Max(0, containerAmmoPickupCount);
             var ammoAmount = Mathf.Max(1, containerAmmoPerPickup);
             var healthAmount = Mathf.Max(1, containerHealthAmount);
-            var dropHealth = Random.value < Mathf.Clamp01(containerHealthDropChance);
+            var dropHealth = UnityEngine.Random.value < Mathf.Clamp01(containerHealthDropChance);
             var totalDrops = moneyCount + ammoCount + (dropHealth ? 1 : 0);
             var dropIndex = 0;
             var origin = GetDropOrigin();
@@ -380,11 +729,11 @@ namespace RorType.Gameplay.Interaction
             {
                 var angle = ((Mathf.PI * 2f) / totalDrops) * dropIndex;
                 planarDirection = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
-                planarDirection = (planarDirection + Random.insideUnitCircle * 0.35f).normalized;
+                planarDirection = (planarDirection + UnityEngine.Random.insideUnitCircle * 0.35f).normalized;
             }
             else
             {
-                planarDirection = Random.insideUnitCircle.normalized;
+                planarDirection = UnityEngine.Random.insideUnitCircle.normalized;
             }
 
             if (planarDirection.sqrMagnitude <= 0.0001f)
@@ -393,7 +742,7 @@ namespace RorType.Gameplay.Interaction
             }
 
             var launchSpeed = Mathf.Max(0f, containerDropLaunchSpeed);
-            return new Vector3(planarDirection.x, Random.Range(1.2f, 1.65f), planarDirection.y) * launchSpeed;
+            return new Vector3(planarDirection.x, UnityEngine.Random.Range(1.2f, 1.65f), planarDirection.y) * launchSpeed;
         }
 
         private ShopKind ResolveShopKind()

@@ -475,3 +475,11 @@
 
 - `docs/balance.md` is now the compact working balance document for collectible nominal values, enemy balance, player stats, shops, spawn zones, and relevant environment values.
 - When balance values in older documentation conflict with `docs/balance.md`, prefer current prefab/script files first, then `docs/balance.md` as the human-readable summary.
+
+## 2026-06-13 configurable shop and shield note
+
+- Merchant and blacksmith offers are now driven by serialized `shopItems` on `WorldInteractable` prefabs instead of only hardcoded Store/HAMMER menus.
+- `Store` defaults now include ammo, partial heal, full heal, one-time shield unlock, and shield restore that appears only after shield is unlocked.
+- `HAMMER` defaults now include ammo, one-time extra dash charge, one-time damage x2, one-time shield unlock, shield +100, and max HP +100.
+- Player resources now include persistent shield/max shield, persistent max HP bonus, and persistent extra dash upgrade. Shield absorbs incoming HP damage first and appears as a blue HUD bar next to HP only after it exists.
+- Repeatable shop items can be bought by holding their number key in the choice UI; repeats accelerate while held and are capped at three purchases per second.

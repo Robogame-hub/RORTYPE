@@ -343,6 +343,8 @@ MonoBehaviour:
   maxMoney: 999999
   maxHealth: 500
   startingHealth: 500
+  startingMaxShield: 0
+  startingShield: 0
   maxStamina: 100
   sprintDrainPerSecond: 10
   staminaRegenPerSecond: 35

@@ -11,12 +11,25 @@ namespace RorType.Gameplay.UI
         public readonly struct ChoiceOption
         {
             public readonly string Label;
-            public readonly Action Callback;
+            public readonly Func<bool> Callback;
+            public readonly bool RepeatWhileHeld;
 
-            public ChoiceOption(string label, Action callback)
+            public ChoiceOption(string label, Action callback, bool repeatWhileHeld = false)
+            {
+                Label = label;
+                Callback = () =>
+                {
+                    callback?.Invoke();
+                    return true;
+                };
+                RepeatWhileHeld = repeatWhileHeld;
+            }
+
+            public ChoiceOption(string label, Func<bool> callback, bool repeatWhileHeld = false)
             {
                 Label = label;
                 Callback = callback;
+                RepeatWhileHeld = repeatWhileHeld;
             }
         }
 
@@ -25,7 +38,11 @@ namespace RorType.Gameplay.UI
             public GameObject Root;
             public Button Button;
             public Text Label;
-            public Action Callback;
+            public Func<bool> Callback;
+            public bool RepeatWhileHeld;
+            public bool StopRepeatUntilReleased;
+            public float HeldDuration;
+            public float RepeatTimer;
         }
 
         private static PortalUiRuntime instance;
@@ -37,6 +54,11 @@ namespace RorType.Gameplay.UI
         private GameObject choiceRoot;
         private Text choiceTitle;
         private RectTransform choiceButtonContainer;
+
+        private const float RepeatStartDelay = 0.35f;
+        private const float SlowRepeatInterval = 0.75f;
+        private const float FastRepeatInterval = 1f / 3f;
+        private const float RepeatAccelerationTime = 2f;
 
         public static bool IsChoiceOpen => instance != null && instance.choiceRoot != null && instance.choiceRoot.activeSelf;
 
@@ -128,15 +150,68 @@ namespace RorType.Gameplay.UI
                     continue;
                 }
 
-                var keyCode = (KeyCode)((int)KeyCode.Alpha1 + index);
-                if (!Input.GetKeyDown(keyCode))
-                {
-                    continue;
-                }
+                TickChoiceHotkey(choiceButtons[index], (KeyCode)((int)KeyCode.Alpha1 + index));
+            }
+        }
 
-                choiceButtons[index].Callback?.Invoke();
+        private void TickChoiceHotkey(ChoiceButton choiceButton, KeyCode keyCode)
+        {
+            if (choiceButton == null)
+            {
                 return;
             }
+
+            if (Input.GetKeyUp(keyCode))
+            {
+                choiceButton.HeldDuration = 0f;
+                choiceButton.RepeatTimer = 0f;
+                choiceButton.StopRepeatUntilReleased = false;
+                return;
+            }
+
+            if (Input.GetKeyDown(keyCode))
+            {
+                var keepRepeating = InvokeChoice(choiceButton);
+                choiceButton.HeldDuration = 0f;
+                choiceButton.RepeatTimer = RepeatStartDelay;
+                choiceButton.StopRepeatUntilReleased = !keepRepeating;
+                return;
+            }
+
+            if (!choiceButton.RepeatWhileHeld || choiceButton.StopRepeatUntilReleased || !Input.GetKey(keyCode))
+            {
+                return;
+            }
+
+            choiceButton.HeldDuration += Time.unscaledDeltaTime;
+            choiceButton.RepeatTimer -= Time.unscaledDeltaTime;
+            if (choiceButton.RepeatTimer > 0f)
+            {
+                return;
+            }
+
+            var interval = ResolveRepeatInterval(choiceButton.HeldDuration);
+            while (choiceButton.RepeatTimer <= 0f)
+            {
+                if (!InvokeChoice(choiceButton))
+                {
+                    choiceButton.StopRepeatUntilReleased = true;
+                    return;
+                }
+
+                choiceButton.RepeatTimer += interval;
+            }
+        }
+
+        private static bool InvokeChoice(ChoiceButton choiceButton)
+        {
+            return choiceButton?.Callback?.Invoke() ?? false;
+        }
+
+        private static float ResolveRepeatInterval(float heldDuration)
+        {
+            var t = Mathf.Clamp01(heldDuration / RepeatAccelerationTime);
+            return Mathf.Lerp(SlowRepeatInterval, FastRepeatInterval, t);
         }
 
         private void BuildUi()
@@ -212,8 +287,12 @@ namespace RorType.Gameplay.UI
                 var option = options[index];
                 button.Label.text = $"{index + 1}. {option.Label}";
                 button.Callback = option.Callback;
+                button.RepeatWhileHeld = option.RepeatWhileHeld;
+                button.StopRepeatUntilReleased = false;
+                button.HeldDuration = 0f;
+                button.RepeatTimer = 0f;
                 button.Button.onClick.RemoveAllListeners();
-                button.Button.onClick.AddListener(() => button.Callback?.Invoke());
+                button.Button.onClick.AddListener(() => { InvokeChoice(button); });
             }
         }
 

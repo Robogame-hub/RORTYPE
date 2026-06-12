@@ -14,14 +14,19 @@ namespace RorType.Gameplay.UI
         private Text ammoLabel;
         private Text moneyLabel;
         private Image[] dashCharges;
+        private Transform dashRowTransform;
         private Image staminaFill;
         private Image healthFill;
+        private Image shieldFill;
+        private GameObject shieldRoot;
         private float ammoPulseTimer;
         private float moneyPulseTimer;
         private float healthPulseTimer;
+        private float shieldPulseTimer;
         private int lastAmmo = -1;
         private int lastMoney = -1;
         private float lastHealth = -1f;
+        private float lastShield = -1f;
 
         public static void Bind(PlayerResourceController playerResources)
         {
@@ -83,6 +88,7 @@ namespace RorType.Gameplay.UI
             UpdateDashUi();
             UpdateStaminaUi();
             UpdateHealthUi();
+            UpdateShieldUi();
         }
 
         private void BuildUi()
@@ -127,6 +133,7 @@ namespace RorType.Gameplay.UI
 
             var dashRow = new GameObject("Dash Charges", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             dashRow.transform.SetParent(root.transform, false);
+            dashRowTransform = dashRow.transform;
             dashRow.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 18f);
             var dashLayout = dashRow.GetComponent<HorizontalLayoutGroup>();
             dashLayout.spacing = 8f;
@@ -136,11 +143,7 @@ namespace RorType.Gameplay.UI
             dashLayout.childForceExpandHeight = false;
             dashLayout.childForceExpandWidth = false;
 
-            dashCharges = new Image[2];
-            for (var i = 0; i < dashCharges.Length; i++)
-            {
-                dashCharges[i] = CreateDashCharge($"Dash {i + 1}", dashRow.transform);
-            }
+            EnsureDashChargeCount(2);
 
             var staminaRoot = new GameObject("Stamina", typeof(RectTransform), typeof(Image));
             staminaRoot.transform.SetParent(root.transform, false);
@@ -162,25 +165,24 @@ namespace RorType.Gameplay.UI
             fillRect.offsetMin = new Vector2(2f, 2f);
             fillRect.offsetMax = new Vector2(-2f, -2f);
 
-            var healthRoot = new GameObject("Health", typeof(RectTransform), typeof(Image));
-            healthRoot.transform.SetParent(root.transform, false);
-            healthRoot.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 16f);
-            healthRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+            var healthShieldRow = new GameObject("Health Shield Row", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            healthShieldRow.transform.SetParent(root.transform, false);
+            healthShieldRow.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 16f);
+            var healthShieldLayout = healthShieldRow.GetComponent<HorizontalLayoutGroup>();
+            healthShieldLayout.spacing = 6f;
+            healthShieldLayout.childAlignment = TextAnchor.MiddleRight;
+            healthShieldLayout.childControlHeight = true;
+            healthShieldLayout.childControlWidth = true;
+            healthShieldLayout.childForceExpandHeight = true;
+            healthShieldLayout.childForceExpandWidth = true;
 
-            var healthFillObject = new GameObject("Fill", typeof(RectTransform), typeof(Image));
-            healthFillObject.transform.SetParent(healthRoot.transform, false);
-            healthFill = healthFillObject.GetComponent<Image>();
-            healthFill.color = new Color(0.95f, 0.14f, 0.14f, 0.96f);
-            healthFill.type = Image.Type.Filled;
-            healthFill.fillMethod = Image.FillMethod.Horizontal;
-            healthFill.fillOrigin = 0;
+            shieldRoot = CreateBarRoot("Shield", healthShieldRow.transform);
+            shieldFill = CreateBarFill("Fill", shieldRoot.transform, new Color(0.2f, 0.62f, 1f, 0.96f));
+            shieldRoot.SetActive(false);
 
-            var healthFillRect = healthFill.rectTransform;
-            healthFillRect.anchorMin = new Vector2(0f, 0f);
-            healthFillRect.anchorMax = new Vector2(1f, 1f);
-            healthFillRect.pivot = new Vector2(0f, 0.5f);
-            healthFillRect.offsetMin = new Vector2(2f, 2f);
-            healthFillRect.offsetMax = new Vector2(-2f, -2f);
+            var healthRoot = CreateBarRoot("Health", healthShieldRow.transform);
+
+            healthFill = CreateBarFill("Fill", healthRoot.transform, new Color(0.95f, 0.14f, 0.14f, 0.96f));
 
             var moneyRoot = new GameObject("Money Status", typeof(RectTransform));
             moneyRoot.transform.SetParent(canvas.transform, false);
@@ -205,6 +207,7 @@ namespace RorType.Gameplay.UI
                 return;
             }
 
+            EnsureDashChargeCount(motor.MaxDashCharges);
             for (var i = 0; i < dashCharges.Length; i++)
             {
                 var isReady = i < motor.DashCharges;
@@ -234,6 +237,23 @@ namespace RorType.Gameplay.UI
             SetBarFill(healthFill, resources.HealthNormalized);
         }
 
+        private void UpdateShieldUi()
+        {
+            if (shieldRoot == null || shieldFill == null)
+            {
+                return;
+            }
+
+            var hasShield = resources.HasShield;
+            shieldRoot.SetActive(hasShield);
+            if (!hasShield)
+            {
+                return;
+            }
+
+            SetBarFill(shieldFill, resources.ShieldNormalized);
+        }
+
         private void UpdateTextFeedback()
         {
             if (lastAmmo >= 0 && lastAmmo != resources.Ammo)
@@ -251,17 +271,25 @@ namespace RorType.Gameplay.UI
                 healthPulseTimer = 0.18f;
             }
 
+            if (lastShield >= 0f && !Mathf.Approximately(lastShield, resources.Shield))
+            {
+                shieldPulseTimer = 0.18f;
+            }
+
             lastAmmo = resources.Ammo;
             lastMoney = resources.Money;
             lastHealth = resources.Health;
+            lastShield = resources.Shield;
 
             ammoPulseTimer = Mathf.Max(0f, ammoPulseTimer - Time.deltaTime);
             moneyPulseTimer = Mathf.Max(0f, moneyPulseTimer - Time.deltaTime);
             healthPulseTimer = Mathf.Max(0f, healthPulseTimer - Time.deltaTime);
+            shieldPulseTimer = Mathf.Max(0f, shieldPulseTimer - Time.deltaTime);
 
             ApplyPulse(ammoLabel != null ? ammoLabel.rectTransform : null, ammoPulseTimer);
             ApplyPulse(moneyLabel != null ? moneyLabel.rectTransform : null, moneyPulseTimer);
             ApplyPulse(healthFill != null ? healthFill.rectTransform.parent as RectTransform : null, healthPulseTimer);
+            ApplyPulse(shieldFill != null ? shieldFill.rectTransform.parent as RectTransform : null, shieldPulseTimer);
         }
 
         private static void ApplyPulse(RectTransform target, float timer)
@@ -302,6 +330,65 @@ namespace RorType.Gameplay.UI
             label.verticalOverflow = VerticalWrapMode.Overflow;
             label.rectTransform.sizeDelta = size;
             return label;
+        }
+
+        private static GameObject CreateBarRoot(string objectName, Transform parent)
+        {
+            var barRoot = new GameObject(objectName, typeof(RectTransform), typeof(Image));
+            barRoot.transform.SetParent(parent, false);
+            barRoot.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 16f);
+            barRoot.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.72f);
+            return barRoot;
+        }
+
+        private static Image CreateBarFill(string objectName, Transform parent, Color color)
+        {
+            var fillObject = new GameObject(objectName, typeof(RectTransform), typeof(Image));
+            fillObject.transform.SetParent(parent, false);
+            var fill = fillObject.GetComponent<Image>();
+            fill.color = color;
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = 0;
+
+            var fillRect = fill.rectTransform;
+            fillRect.anchorMin = new Vector2(0f, 0f);
+            fillRect.anchorMax = new Vector2(1f, 1f);
+            fillRect.pivot = new Vector2(0f, 0.5f);
+            fillRect.offsetMin = new Vector2(2f, 2f);
+            fillRect.offsetMax = new Vector2(-2f, -2f);
+            return fill;
+        }
+
+        private void EnsureDashChargeCount(int count)
+        {
+            count = Mathf.Max(1, count);
+            if (dashRowTransform == null)
+            {
+                return;
+            }
+
+            if (dashCharges != null && dashCharges.Length == count)
+            {
+                return;
+            }
+
+            if (dashCharges != null)
+            {
+                for (var i = 0; i < dashCharges.Length; i++)
+                {
+                    if (dashCharges[i] != null)
+                    {
+                        Destroy(dashCharges[i].gameObject);
+                    }
+                }
+            }
+
+            dashCharges = new Image[count];
+            for (var i = 0; i < dashCharges.Length; i++)
+            {
+                dashCharges[i] = CreateDashCharge($"Dash {i + 1}", dashRowTransform);
+            }
         }
 
         private static Image CreateDashCharge(string objectName, Transform parent)

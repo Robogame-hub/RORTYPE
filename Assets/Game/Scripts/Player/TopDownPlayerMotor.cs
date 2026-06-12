@@ -76,7 +76,7 @@ namespace RorType.Gameplay.Player
         public bool IsSprinting { get; private set; }
         public bool IsDashing => dashTimer > 0f;
         public int DashCharges => dashCharges;
-        public int MaxDashCharges => maxDashCharges;
+        public int MaxDashCharges => GetMaxDashCharges();
         public Vector3 RenderPosition => visualRoot != null && visualRoot != transform && hasVisualPosition
             ? smoothedVisualWorldPosition
             : transform.position;
@@ -90,7 +90,7 @@ namespace RorType.Gameplay.Player
             resources = GetComponent<PlayerResourceController>();
             visualRoot = ResolveVisualRoot();
             CacheVisualBasePose();
-            dashCharges = Mathf.Max(1, maxDashCharges);
+            dashCharges = GetMaxDashCharges();
 
             body.useGravity = false;
             body.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
@@ -217,7 +217,7 @@ namespace RorType.Gameplay.Player
             dashTimer = 0f;
             dashCooldownTimer = 0f;
             dashChargeRecoveryTimer = 0f;
-            dashCharges = Mathf.Max(1, maxDashCharges);
+            dashCharges = GetMaxDashCharges();
             dashQueued = false;
             airDashConsumed = false;
             externalPlanarVelocity = Vector3.zero;
@@ -568,7 +568,8 @@ namespace RorType.Gameplay.Player
             dashTimer = dashDuration;
             dashCooldownTimer = dashCooldown;
             dashCharges = Mathf.Max(0, dashCharges - 1);
-            if (dashCharges < maxDashCharges && dashChargeRecoveryTimer <= 0f)
+            var effectiveMaxDashCharges = GetMaxDashCharges();
+            if (dashCharges < effectiveMaxDashCharges && dashChargeRecoveryTimer <= 0f)
             {
                 dashChargeRecoveryTimer = dashChargeRecoveryTime;
             }
@@ -591,10 +592,10 @@ namespace RorType.Gameplay.Player
 
         private void TickDashChargeRecovery(float deltaTime)
         {
-            maxDashCharges = Mathf.Max(1, maxDashCharges);
-            if (dashCharges >= maxDashCharges)
+            var effectiveMaxDashCharges = GetMaxDashCharges();
+            if (dashCharges >= effectiveMaxDashCharges)
             {
-                dashCharges = maxDashCharges;
+                dashCharges = effectiveMaxDashCharges;
                 dashChargeRecoveryTimer = 0f;
                 return;
             }
@@ -605,8 +606,18 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            dashCharges = Mathf.Min(maxDashCharges, dashCharges + 1);
-            dashChargeRecoveryTimer = dashCharges < maxDashCharges ? dashChargeRecoveryTime : 0f;
+            dashCharges = Mathf.Min(effectiveMaxDashCharges, dashCharges + 1);
+            dashChargeRecoveryTimer = dashCharges < effectiveMaxDashCharges ? dashChargeRecoveryTime : 0f;
+        }
+
+        private int GetMaxDashCharges()
+        {
+            if (resources == null)
+            {
+                resources = GetComponent<PlayerResourceController>();
+            }
+
+            return Mathf.Max(1, maxDashCharges + (resources != null && resources.HasExtraDashUpgrade ? 1 : 0));
         }
 
         private Vector3 ResolveDashDirection()

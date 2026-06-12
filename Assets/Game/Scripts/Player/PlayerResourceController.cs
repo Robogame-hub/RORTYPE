@@ -13,7 +13,11 @@ namespace RorType.Gameplay.Player
             public int Ammo;
             public int Money;
             public float Health;
+            public float MaxHealthBonus;
+            public float Shield;
+            public float MaxShield;
             public bool DamageUpgradePurchased;
+            public bool ExtraDashPurchased;
         }
 
         private static PersistentState persistentState;
@@ -40,6 +44,10 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(1f)] private float maxHealth = 500f;
         [SerializeField, Min(1f)] private float startingHealth = 500f;
 
+        [Header("Shield")]
+        [SerializeField, Min(0f)] private float startingMaxShield;
+        [SerializeField, Min(0f)] private float startingShield;
+
         [Header("Stamina")]
         [SerializeField, Min(1f)] private float maxStamina = 100f;
         [SerializeField, Min(0f)] private float sprintDrainPerSecond = 10f;
@@ -47,20 +55,26 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float staminaRegenDelay = 0.45f;
 
         private float staminaRegenDelayTimer;
+        private float maxHealthBonus;
 
         public int Ammo { get; private set; }
         public int MaxAmmo => maxAmmo;
         public int Money { get; private set; }
         public int MaxMoney => maxMoney;
         public float Health { get; private set; }
-        public float MaxHealth => maxHealth;
-        public float HealthNormalized => maxHealth > 0f ? Mathf.Clamp01(Health / maxHealth) : 0f;
+        public float MaxHealth => maxHealth + maxHealthBonus;
+        public float HealthNormalized => MaxHealth > 0f ? Mathf.Clamp01(Health / MaxHealth) : 0f;
+        public float Shield { get; private set; }
+        public float MaxShield { get; private set; }
+        public float ShieldNormalized => MaxShield > 0f ? Mathf.Clamp01(Shield / MaxShield) : 0f;
+        public bool HasShield => MaxShield > 0f;
         public float Stamina { get; private set; }
         public float MaxStamina => maxStamina;
         public float StaminaNormalized => maxStamina > 0f ? Mathf.Clamp01(Stamina / maxStamina) : 0f;
         public bool HasAmmo => Ammo > 0;
         public bool HasSprintStamina => Stamina > 0.01f;
         public bool HasDamageUpgrade { get; private set; }
+        public bool HasExtraDashUpgrade { get; private set; }
         public float DamageMultiplier => HasDamageUpgrade ? 2f : 1f;
         public CombatTeam Team => CombatTeam.Player;
         public bool IsAlive => Health > 0f;
@@ -69,7 +83,9 @@ namespace RorType.Gameplay.Player
         public event Action<int> AmmoChanged;
         public event Action<int> MoneyChanged;
         public event Action<float, float> HealthChanged;
+        public event Action<float, float> ShieldChanged;
         public event Action<float, float> StaminaChanged;
+        public event Action UpgradesChanged;
 
         private void Awake()
         {
@@ -79,15 +95,23 @@ namespace RorType.Gameplay.Player
             {
                 Ammo = Mathf.Clamp(persistentState.Ammo, 0, maxAmmo);
                 Money = Mathf.Clamp(persistentState.Money, 0, maxMoney);
-                Health = Mathf.Clamp(persistentState.Health, 0f, maxHealth);
+                maxHealthBonus = Mathf.Max(0f, persistentState.MaxHealthBonus);
+                Health = Mathf.Clamp(persistentState.Health, 0f, MaxHealth);
+                MaxShield = Mathf.Max(0f, persistentState.MaxShield);
+                Shield = Mathf.Clamp(persistentState.Shield, 0f, MaxShield);
                 HasDamageUpgrade = persistentState.DamageUpgradePurchased;
+                HasExtraDashUpgrade = persistentState.ExtraDashPurchased;
             }
             else
             {
+                maxHealthBonus = 0f;
                 Ammo = startingAmmo;
                 Money = startingMoney;
                 Health = startingHealth;
+                MaxShield = startingMaxShield;
+                Shield = Mathf.Clamp(startingShield, 0f, MaxShield);
                 HasDamageUpgrade = false;
+                HasExtraDashUpgrade = false;
                 SavePersistentState();
             }
 
@@ -167,14 +191,86 @@ namespace RorType.Gameplay.Player
 
         public void AddHealth(float amount)
         {
-            if (amount <= 0f || Health >= maxHealth)
+            if (amount <= 0f || Health >= MaxHealth)
             {
                 return;
             }
 
-            Health = Mathf.Clamp(Health + amount, 0f, maxHealth);
+            Health = Mathf.Clamp(Health + amount, 0f, MaxHealth);
             SavePersistentState();
-            HealthChanged?.Invoke(Health, maxHealth);
+            HealthChanged?.Invoke(Health, MaxHealth);
+        }
+
+        public void FullHeal()
+        {
+            if (Health >= MaxHealth)
+            {
+                return;
+            }
+
+            Health = MaxHealth;
+            SavePersistentState();
+            HealthChanged?.Invoke(Health, MaxHealth);
+        }
+
+        public void RestoreShield()
+        {
+            if (!HasShield || Shield >= MaxShield)
+            {
+                return;
+            }
+
+            Shield = MaxShield;
+            SavePersistentState();
+            ShieldChanged?.Invoke(Shield, MaxShield);
+        }
+
+        public bool TryPurchaseHealthUpgrade(int cost, float amount)
+        {
+            amount = Mathf.Max(1f, amount);
+            if (!TrySpendMoney(cost))
+            {
+                return false;
+            }
+
+            maxHealthBonus += amount;
+            Health = Mathf.Clamp(Health + amount, 0f, MaxHealth);
+            SavePersistentState();
+            HealthChanged?.Invoke(Health, MaxHealth);
+            UpgradesChanged?.Invoke();
+            return true;
+        }
+
+        public bool TryPurchaseShieldUnlock(int cost, float amount)
+        {
+            amount = Mathf.Max(1f, amount);
+            if (HasShield || !TrySpendMoney(cost))
+            {
+                return false;
+            }
+
+            MaxShield = amount;
+            Shield = MaxShield;
+            SavePersistentState();
+            ShieldChanged?.Invoke(Shield, MaxShield);
+            UpgradesChanged?.Invoke();
+            return true;
+        }
+
+        public bool TryPurchaseShieldUpgrade(int cost, float amount)
+        {
+            amount = Mathf.Max(1f, amount);
+            if (!HasShield || !TrySpendMoney(cost))
+            {
+                return false;
+            }
+
+            MaxShield += amount;
+            Shield = Mathf.Clamp(Shield + amount, 0f, MaxShield);
+            SavePersistentState();
+            ShieldChanged?.Invoke(Shield, MaxShield);
+            UpgradesChanged?.Invoke();
+            return true;
         }
 
         public bool TryPurchaseDamageUpgrade(int cost)
@@ -186,6 +282,20 @@ namespace RorType.Gameplay.Player
 
             HasDamageUpgrade = true;
             SavePersistentState();
+            UpgradesChanged?.Invoke();
+            return true;
+        }
+
+        public bool TryPurchaseExtraDashUpgrade(int cost)
+        {
+            if (HasExtraDashUpgrade || !TrySpendMoney(cost))
+            {
+                return false;
+            }
+
+            HasExtraDashUpgrade = true;
+            SavePersistentState();
+            UpgradesChanged?.Invoke();
             return true;
         }
 
@@ -196,10 +306,24 @@ namespace RorType.Gameplay.Player
                 return false;
             }
 
-            Health = Mathf.Max(0f, Health - hitInfo.Damage);
+            var remainingDamage = hitInfo.Damage;
+            if (Shield > 0f)
+            {
+                var absorbedDamage = Mathf.Min(Shield, remainingDamage);
+                Shield = Mathf.Max(0f, Shield - absorbedDamage);
+                remainingDamage -= absorbedDamage;
+                ShieldChanged?.Invoke(Shield, MaxShield);
+                FloatingWorldText.Spawn(transform.position + Vector3.up * 2.35f, $"-{absorbedDamage:0} Shield", new Color(0.35f, 0.75f, 1f), 0.14f);
+            }
+
+            if (remainingDamage > 0f)
+            {
+                Health = Mathf.Max(0f, Health - remainingDamage);
+                HealthChanged?.Invoke(Health, MaxHealth);
+                FloatingWorldText.Spawn(transform.position + Vector3.up * 2.1f, $"-{remainingDamage:0} HP", Color.red, 0.14f);
+            }
+
             SavePersistentState();
-            HealthChanged?.Invoke(Health, maxHealth);
-            FloatingWorldText.Spawn(transform.position + Vector3.up * 2.1f, $"-{hitInfo.Damage:0} HP", Color.red, 0.14f);
             return true;
         }
 
@@ -250,7 +374,11 @@ namespace RorType.Gameplay.Player
                 Ammo = Ammo,
                 Money = Money,
                 Health = Health,
-                DamageUpgradePurchased = HasDamageUpgrade
+                MaxHealthBonus = maxHealthBonus,
+                Shield = Shield,
+                MaxShield = MaxShield,
+                DamageUpgradePurchased = HasDamageUpgrade,
+                ExtraDashPurchased = HasExtraDashUpgrade
             };
             hasPersistentState = true;
         }
@@ -286,6 +414,9 @@ namespace RorType.Gameplay.Player
             {
                 startingHealth = maxHealth;
             }
+
+            startingMaxShield = Mathf.Max(0f, startingMaxShield);
+            startingShield = Mathf.Clamp(startingShield, 0f, startingMaxShield);
 
             if (maxStamina <= 1f)
             {
