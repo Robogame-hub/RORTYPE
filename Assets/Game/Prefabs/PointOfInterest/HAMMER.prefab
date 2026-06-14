@@ -47,7 +47,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8233d90336aea43098adf6dbabd606a2, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.ProBuilder::UnityEngine.ProBuilder.ProBuilderMesh
   m_MeshFormatVersion: 2
   m_Faces:
@@ -264,7 +264,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1ca002da428252441b92f28d83c8a65f, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.ProBuilder::UnityEngine.ProBuilder.Shapes.ProBuilderShape
   m_Shape:
     rid: 660581283855073487
@@ -385,6 +385,7 @@ GameObject:
   - component: {fileID: 901001001001001001}
   - component: {fileID: 901001001001001101}
   - component: {fileID: 901001001001001201}
+  - component: {fileID: 901001001001001301}
   m_Layer: 0
   m_Name: HAMMER
   m_TagString: Untagged
@@ -429,7 +430,7 @@ MonoBehaviour:
   iconGroup: 2
   markerShape: 2
   iconColor: {r: 0.2, g: 0.55, b: 1, a: 1}
-  markerSize: 16
+  markerSize: 25
   rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}
 --- !u!135 &901001001001001101
@@ -476,33 +477,33 @@ MonoBehaviour:
   disableMinimapMarkerOnComplete: 1
   autoCreateInteractionTrigger: 1
   feedbackDuration: 1.2
-  ammoPurchaseAmount: 1
-  ammoPurchaseCost: 1
+  ammoPurchaseAmount: 10
+  ammoPurchaseCost: 10
   healthPurchaseAmount: 20
   healthPurchaseCost: 20
-  damageUpgradeCost: 1000
+  damageUpgradeCost: 100
   shopItems:
   - itemType: 0
     displayName: "\u041F\u0430\u0442\u0440\u043E\u043D\u044B"
-    cost: 1
-    amount: 1
+    cost: 10
+    amount: 10
     repeatWhileHeld: 1
     hideWhenUnavailable: 0
   - itemType: 8
     displayName: "\u0414\u043E\u043F. \u0440\u044B\u0432\u043E\u043A"
-    cost: 1000
+    cost: 100
     amount: 1
     repeatWhileHeld: 0
     hideWhenUnavailable: 1
   - itemType: 7
     displayName: "\u0423\u0441\u0438\u043B\u0438\u0442\u044C \u0443\u0440\u043E\u043D"
-    cost: 1000
+    cost: 100
     amount: 0
     repeatWhileHeld: 0
     hideWhenUnavailable: 1
   - itemType: 3
     displayName: "\u0429\u0438\u0442"
-    cost: 1000
+    cost: 100
     amount: 100
     repeatWhileHeld: 0
     hideWhenUnavailable: 1
@@ -519,6 +520,53 @@ MonoBehaviour:
     repeatWhileHeld: 0
     hideWhenUnavailable: 0
   pickupDisappearDelay: 0.7
+--- !u!114 &901001001001001301
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 587618912865219205}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d471dfdf3024c34b9d6a4e698027f87, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.ShopInteractable
+  shopKind: 2
+  interactionRadius: 7
+  interactionPrompt: "\u041A\u0443\u0437\u043D\u0435\u0446: \u043D\u0430\u0436\u043C\u0438\u0442\u0435 E"
+  shopUi: {fileID: 0}
+  shopItems:
+  - itemType: 0
+    displayName: "\u041F\u0430\u0442\u0440\u043E\u043D\u044B"
+    cost: 10
+    amount: 10
+    hideWhenUnavailable: 0
+  - itemType: 8
+    displayName: "\u0414\u043E\u043F. \u0440\u044B\u0432\u043E\u043A"
+    cost: 100
+    amount: 1
+    hideWhenUnavailable: 1
+  - itemType: 7
+    displayName: "\u0423\u0440\u043E\u043D x2"
+    cost: 100
+    amount: 0
+    hideWhenUnavailable: 1
+  - itemType: 3
+    displayName: "\u0429\u0438\u0442"
+    cost: 100
+    amount: 100
+    hideWhenUnavailable: 1
+  - itemType: 5
+    displayName: "\u0429\u0438\u0442 +100"
+    cost: 500
+    amount: 100
+    hideWhenUnavailable: 1
+  - itemType: 6
+    displayName: "HP +100"
+    cost: 500
+    amount: 100
+    hideWhenUnavailable: 0
 --- !u!1 &3217059380630970415
 GameObject:
   m_ObjectHideFlags: 0

@@ -84,7 +84,7 @@ namespace RorType.Gameplay.UI
 
             UpdateTextFeedback();
             ammoLabel.text = $"\u041f\u0430\u0442\u0440\u043e\u043d\u044b {resources.Ammo}";
-            moneyLabel.text = $"\u0417\u043E\u043B\u043E\u0442\u043E {resources.Money}";
+            moneyLabel.text = $"{resources.Money}G";
             UpdateDashUi();
             UpdateStaminaUi();
             UpdateHealthUi();
@@ -130,6 +130,9 @@ namespace RorType.Gameplay.UI
             rootLayout.childForceExpandWidth = true;
 
             ammoLabel = CreateLabel("Ammo Label", root.transform, uiFont, 24, new Vector2(0f, 28f));
+            var ammoOutline = ammoLabel.gameObject.AddComponent<Outline>();
+            ammoOutline.effectColor = new Color(0f, 0f, 0f, 1f);
+            ammoOutline.effectDistance = new Vector2(2f, -2f);
 
             var dashRow = new GameObject("Dash Charges", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             dashRow.transform.SetParent(root.transform, false);

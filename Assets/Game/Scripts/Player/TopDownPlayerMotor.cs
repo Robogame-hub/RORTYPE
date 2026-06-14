@@ -39,6 +39,8 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(1)] private int maxDashCharges = 2;
         [SerializeField, Min(0.01f)] private float dashChargeRecoveryTime = 5f;
         [SerializeField] private bool allowAirDash = true;
+        [SerializeField, Min(0f)] private float dashImpactDamage = 1f;
+        [SerializeField, Min(0f)] private float dashImpactImpulse = 3f;
 
         [Header("Impact")]
         [SerializeField, Min(0f)] private float knockbackDamping = 18f;
@@ -69,6 +71,8 @@ namespace RorType.Gameplay.Player
         private Vector3 smoothedVisualWorldPosition;
         private readonly RaycastHit[] movementCastHits = new RaycastHit[16];
         private readonly Collider[] penetrationHits = new Collider[16];
+        private readonly Component[] dashImpactDamageables = new Component[12];
+        private int dashImpactCount;
 
         public Vector3 LastWorldMoveDirection { get; private set; } = Vector3.forward;
         public float CurrentSpeed { get; private set; }
@@ -290,6 +294,8 @@ namespace RorType.Gameplay.Player
             dashDuration = Mathf.Max(0.01f, dashDuration);
             maxDashCharges = Mathf.Max(1, maxDashCharges);
             dashChargeRecoveryTime = Mathf.Max(0.01f, dashChargeRecoveryTime);
+            dashImpactDamage = Mathf.Max(0f, dashImpactDamage);
+            dashImpactImpulse = Mathf.Max(0f, dashImpactImpulse);
             groundedSlopeSnapDistance = Mathf.Max(0f, groundedSlopeSnapDistance);
             wallSkinWidth = Mathf.Max(0f, wallSkinWidth);
         }
@@ -339,10 +345,56 @@ namespace RorType.Gameplay.Player
                 return targetPosition;
             }
 
+            TryApplyDashImpact(hit, direction);
+
             var allowedDistance = Mathf.Max(0f, hit.distance - wallSkinWidth);
             var resolvedPosition = currentPosition + (direction * Mathf.Min(distance, allowedDistance));
             resolvedPosition.y = targetPosition.y;
             return resolvedPosition;
+        }
+
+        private void TryApplyDashImpact(RaycastHit hit, Vector3 direction)
+        {
+            if (!IsDashing || dashImpactDamage <= 0f || hit.collider == null)
+            {
+                return;
+            }
+
+            if (!CombatUtility.TryGetDamageable(hit.collider, out var damageable, out var damageableComponent))
+            {
+                return;
+            }
+
+            if (!damageable.IsAlive || damageable.Team == CombatTeam.Player || CombatUtility.SharesRoot(gameObject, damageableComponent))
+            {
+                return;
+            }
+
+            for (var i = 0; i < dashImpactCount; i++)
+            {
+                if (dashImpactDamageables[i] == damageableComponent)
+                {
+                    return;
+                }
+            }
+
+            if (dashImpactCount < dashImpactDamageables.Length)
+            {
+                dashImpactDamageables[dashImpactCount] = damageableComponent;
+                dashImpactCount++;
+            }
+            else
+            {
+                return;
+            }
+
+            damageable.ReceiveHit(new CombatHitInfo(
+                dashImpactDamage,
+                hit.point,
+                direction,
+                dashImpactImpulse,
+                gameObject,
+                CombatTeam.Player));
         }
 
         private bool TryGetMovementBlocker(Vector3 castPosition, Vector3 direction, float castDistance, out RaycastHit closestHit)
@@ -567,6 +619,7 @@ namespace RorType.Gameplay.Player
             LastWorldMoveDirection = dashDirection;
             dashTimer = dashDuration;
             dashCooldownTimer = dashCooldown;
+            ClearDashImpactDamageables();
             dashCharges = Mathf.Max(0, dashCharges - 1);
             var effectiveMaxDashCharges = GetMaxDashCharges();
             if (dashCharges < effectiveMaxDashCharges && dashChargeRecoveryTimer <= 0f)
@@ -608,6 +661,16 @@ namespace RorType.Gameplay.Player
 
             dashCharges = Mathf.Min(effectiveMaxDashCharges, dashCharges + 1);
             dashChargeRecoveryTimer = dashCharges < effectiveMaxDashCharges ? dashChargeRecoveryTime : 0f;
+        }
+
+        private void ClearDashImpactDamageables()
+        {
+            for (var i = 0; i < dashImpactCount; i++)
+            {
+                dashImpactDamageables[i] = null;
+            }
+
+            dashImpactCount = 0;
         }
 
         private int GetMaxDashCharges()

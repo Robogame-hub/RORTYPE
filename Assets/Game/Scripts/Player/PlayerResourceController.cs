@@ -26,6 +26,7 @@ namespace RorType.Gameplay.Player
         private const int DefaultMaxAmmo = 999;
         private const int DefaultStartingAmmo = 100;
         private const int DefaultMaxMoney = 999999;
+        private const int DefaultStartingMoney = 1000;
         private const float DefaultMaxHealth = 500f;
         private const float DefaultMaxStamina = 100f;
         private const float DefaultSprintDrainPerSecond = 10f;
@@ -37,7 +38,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0)] private int startingAmmo = 100;
 
         [Header("Money")]
-        [SerializeField, Min(0)] private int startingMoney;
+        [SerializeField, Min(0)] private int startingMoney = 1000;
         [SerializeField, Min(0)] private int maxMoney = 999999;
 
         [Header("Health")]
@@ -403,6 +404,11 @@ namespace RorType.Gameplay.Player
             if (maxMoney <= 0)
             {
                 maxMoney = DefaultMaxMoney;
+            }
+
+            if (startingMoney <= 0)
+            {
+                startingMoney = DefaultStartingMoney;
             }
 
             if (maxHealth <= 1f)

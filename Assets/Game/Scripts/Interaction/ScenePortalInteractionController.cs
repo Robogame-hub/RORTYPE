@@ -16,7 +16,7 @@ namespace RorType.Gameplay.Interaction
 
         private void Update()
         {
-            if (PortalUiRuntime.IsChoiceOpen)
+            if (PortalUiRuntime.IsChoiceOpen || ShopUiPanel.IsAnyOpen)
             {
                 UpdatePortalHighlights();
                 PortalUiRuntime.HidePrompt();
@@ -36,6 +36,20 @@ namespace RorType.Gameplay.Interaction
 
                 inputAdapter.ConsumeInteractPressed();
                 activePortal.Interact();
+                return;
+            }
+
+            var activeShop = ResolveClosestShop();
+            if (activeShop != null)
+            {
+                PortalUiRuntime.ShowPrompt(activeShop.GetInteractionPrompt());
+                if (!inputAdapter.InteractPressed)
+                {
+                    return;
+                }
+
+                inputAdapter.ConsumeInteractPressed();
+                activeShop.Interact(this);
                 return;
             }
 
@@ -106,6 +120,38 @@ namespace RorType.Gameplay.Interaction
             }
 
             return closestPortal;
+        }
+
+        private ShopInteractable ResolveClosestShop()
+        {
+            var shops = ShopInteractable.ActiveShops;
+            ShopInteractable closestShop = null;
+            var closestDistance = float.MaxValue;
+
+            for (var index = 0; index < shops.Count; index++)
+            {
+                var shop = shops[index];
+                if (shop == null || !shop.IsAvailable)
+                {
+                    continue;
+                }
+
+                if (!shop.IsTouchedBy(this))
+                {
+                    continue;
+                }
+
+                var sqrDistance = shop.GetSqrDistanceTo(transform.position);
+                if (sqrDistance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = sqrDistance;
+                closestShop = shop;
+            }
+
+            return closestShop;
         }
 
         private WorldInteractable ResolveClosestInteractable()

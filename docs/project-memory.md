@@ -391,10 +391,10 @@
 ## 2026-06-10 economy/health implementation note
 
 - User-facing workflow preference: for large gameplay requests, first convert the request into a concrete action plan, then implement.
-- `PlayerResourceController` now also stores money, health, and one-time damage upgrade state. Defaults: player health `500`, starting ammo `100`, stamina `100`, money `0`; ammo/money/health/damage-upgrade persist statically across scene loads so scene-local player instances do not reset progress on portal travel.
+- `PlayerResourceController` now also stores money, health, and one-time damage upgrade state. Defaults: player health `500`, starting ammo `100`, stamina `100`, money `1000` for shop testing; ammo/money/health/damage-upgrade persist statically across scene loads so scene-local player instances do not reset progress on portal travel.
 - `PlayerStatusUiRuntime` now shows yellow outlined money text under the top-right minimap area and a red health bar under the stamina bar. Ammo, money, and health changes pulse in the HUD.
 - Chest/capsule interaction is now resource pickup, not ammo-only pickup: chest resolves to `200` gold, capsule resolves to `200` gold plus `100` ammo, shows floating reward text, disables the minimap marker/trigger, then destroys the world object after feedback.
-- `Store` opens a mouse-click shop menu after `E`: buy `1` ammo for `1` gold or buy `20` health for `20` gold. `HAMMER` opens a blacksmith menu after `E`: buy ammo or buy one-time damage x2 for `1000` gold.
+- `Store` opens a mouse-click shop menu after `E`: buy `10` ammo for `10` gold or buy `20` health for `20` gold. `HAMMER` opens a blacksmith menu after `E`: buy `10` ammo for `10` gold or buy one-time blacksmith upgrades.
 - Incoming player health damage is now routed through `IDamageable`: melee enemies deal `10`, shooter projectiles deal `20`, and enemy exploder explosions deal `30`.
 - Enemy death now drops `1-3` resource pickups. Money pickups are yellow random spheres/cubes worth `2` gold each. Shooter enemies may also drop red random spheres/cubes worth `1` ammo each. All enemies may also drop a red health pickup worth `20 HP`; the health pickup is authored at runtime as a red cross made from two rectangular cube bars.
 - New environment scripts/prefabs: `DestructibleCover`/`DestructibleCover.prefab` is a prefab-authored six-block destructible cover with `15 HP`, `4m x 2m` footprint; `ExplosiveBarrel`/`ExplosiveBarrel.prefab` is a prefab-authored light-red cylinder that explodes after three player hits, flashes red three times, and deals `3` damage to enemies within `5m`.
@@ -411,7 +411,7 @@
 - `PlayerStatusUiRuntime` now uses a `1920 x 1080` reference resolution and higher sorting order, keeping the yellow outlined money counter visible below the `500 x 500` top-right minimap.
 - `PlayerResourceController.ReceiveHit` now spawns red `-N HP` floating feedback above the player when health is deducted.
 - `TopDownPlayerMotor` now uses an explicit capsule cast plus a penetration correction pass during grounded movement, strengthening the wall-collision fix beyond the previous Rigidbody sweep.
-- `Chest`, `Capsule`, `Store`, and `HAMMER` prefabs now explicitly serialize the new economy/shop fields. Chest is `200` gold; capsule is `200` gold plus `100` ammo; merchant sells `1` ammo for `1` gold and `20` HP for `20` gold; blacksmith sells ammo and the one-time `1000` gold damage upgrade.
+- `Chest`, `Capsule`, `Store`, and `HAMMER` prefabs now explicitly serialize the new economy/shop fields. Chest is `200` gold; capsule is `200` gold plus `100` ammo; merchant and blacksmith sell `10` ammo for `10` gold; merchant still sells `20` HP for `20` gold. One-time `1000G` shop upgrades were later reduced to `100G` for testing.
 - `Assets/Game/Scene/Level_1.unity` now includes manually placed test instances near the scene player start: `DestructibleCover_Test`, `ExplosiveBarrel_Test_A`, and `ExplosiveBarrel_Test_B`.
 - Unity batchmode compile/import check passed on 2026-06-10 with exit code `0`; only an unrelated existing warning remains for unused `TopDownPlayerMotor.airDashConsumed`.
 
@@ -478,8 +478,56 @@
 
 ## 2026-06-13 configurable shop and shield note
 
-- Merchant and blacksmith offers are now driven by serialized `shopItems` on `WorldInteractable` prefabs instead of only hardcoded Store/HAMMER menus.
+- Superseded implementation detail: merchant and blacksmith offers were previously driven by serialized `shopItems` on `WorldInteractable` prefabs. Current shop logic has moved to `ShopInteractable`; keep the balance values below but do not use `WorldInteractable` for shops.
 - `Store` defaults now include ammo, partial heal, full heal, one-time shield unlock, and shield restore that appears only after shield is unlocked.
 - `HAMMER` defaults now include ammo, one-time extra dash charge, one-time damage x2, one-time shield unlock, shield +100, and max HP +100.
 - Player resources now include persistent shield/max shield, persistent max HP bonus, and persistent extra dash upgrade. Shield absorbs incoming HP damage first and appears as a blue HUD bar next to HP only after it exists.
 - Repeatable shop items can be bought by holding their number key in the choice UI; repeats accelerate while held and are capped at three purchases per second.
+
+## 2026-06-13 shop UI grid note (superseded)
+
+- Superseded implementation detail: shop menus temporarily used `PortalUiRuntime.ChoiceLayout.ShopGrid`, while portal destination choices kept the original vertical list layout.
+- Shop item buttons are grid cards with a runtime text icon, item name, amount detail, and gold price formatted as `G`; price color matches the player money HUD color.
+- Player money HUD, shop prices, and money pickup/container floating text use the accepted gold notation `G`.
+- Hovering a shop card shows a tooltip with the item effect. While any choice/shop UI is open, player combat mouse input is blocked so clicking ammo or other shop buttons does not fire weapons.
+
+## 2026-06-13 shop/portal separation follow-up
+
+- The previous `PortalUiRuntime.ChoiceLayout.ShopGrid` shop approach is superseded: `PortalUiRuntime` is portal-only again, and shops must use separate authored `ShopUiPanel`/`ShopItemCard` UI components.
+- `WorldInteractable` is now resource/container-only; legacy `mode = 0` shop data on older Store/HAMMER prefabs is ignored instead of registering as an interaction.
+- Merchant and blacksmith logic now lives on `ShopInteractable`, with separate serialized `shopKind` and `shopItems` on `Store.prefab` and `HAMMER.prefab`.
+- `ShopInteractable` does not create trigger colliders at runtime. Stores/blacksmiths must have authored trigger colliders and an authored/scene-available `ShopUiPanel`.
+- Portal interaction remains `ScenePortal` + `ScenePortalInteractionController`; shop interaction is resolved separately after portals and still requires pressing `E` before opening the shop UI.
+
+## 2026-06-13 shop UI fallback fix
+
+- `ShopInteractable` now falls back to `ShopUiPanel.GetOrCreateDefault()` when its serialized `shopUi` reference is empty and no scene panel is registered.
+- `ShopUiPanel` can create a minimal runtime canvas/panel/card grid for incomplete scenes, so pressing `E` near `Store` or `HAMMER` opens a purchase menu instead of only logging a missing UI warning.
+- Authored `ShopUiPanel`/`ShopItemCard` scene UI remains preferred for final presentation, but the runtime fallback is accepted as the safety path for old scenes and prefabs.
+
+## 2026-06-13 shop ammo and one-shot refresh note
+
+- Ammo shop items now sell `10` ammo for `10G` in both `Store` and `HAMMER`, including code defaults and serialized prefab `shopItems`.
+- One-shot/availability-gated shop items refresh the open shop panel after purchase whenever `hideWhenUnavailable` is enabled. This keeps blacksmith shield unlock, extra dash, and damage x2 from remaining visible after they are bought.
+
+## 2026-06-13 ammo HUD and shop click fix
+
+- The runtime ammo HUD label now has a black `Outline`, matching the readability approach already used by the money counter.
+- Shop purchases should execute only through the card/button click handler. The panel-level mouse polling no longer invokes purchases on the same click, preventing repeatable items such as ammo from being bought multiple times per click.
+
+## 2026-06-13 temporary shop price test
+
+- Items that previously cost `1000G` now cost `100G` for shop testing: Store shield unlock, HAMMER extra dash, HAMMER damage x2, and HAMMER shield unlock. This is applied in `ShopInteractable` defaults and serialized Store/HAMMER prefab shop data.
+
+## 2026-06-13 destructible loot props note
+
+- `Assets/Game/Scripts/Environment/DestructibleLootContainer.cs` is the shared non-explosive destructible prop component for loot barrels/crates. It implements `IDamageable`, breaks apart authored child meshes/colliders into short-lived debris, and rolls one loot outcome on destruction.
+- `Assets/Game/Prefabs/Environment/DestructibleBarrel.prefab` and `Assets/Game/Prefabs/Environment/DestructibleCrate.prefab` are prefab-authored destructible props: no runtime `Awake` construction is used for their blocking visuals. Both use the existing yellow material.
+- `DestructibleCrate.prefab` is authored as a compact `3 x 3 x 3` matrix of 27 cube child blocks, using `0.6666667` scale cubes so the crate's total bounds are `2 x 2 x 2`.
+- `DestructibleBarrel.prefab` keeps debris impulse disabled (`debrisImpulseMultiplier = 0`). `DestructibleLootContainer` still detaches zero-impulse debris into falling Rigidbody parts, but marks their colliders trigger-only and applies only small horizontal scatter so overlapping authored barrel pieces do not launch upward.
+- Default loot roll weights are equal for nothing, gold, ammo, and health. Gold drops `1-3` pickup pieces, ammo drops `1-2` pickup pieces, health drops `1` health pickup. The pieces use the standard `ResourcePickupCollectible` prefab-backed pickups from `Assets/Game/Resources/ResourcePickups/`.
+- `TopDownPlayerMotor` dash movement now applies a single `CombatTeam.Player` dash hit to the `IDamageable` blocker found by the grounded movement capsule cast, so dash damage works even when collision-aware movement stops before penetration.
+
+## 2026-06-13 minimap POI marker size note
+
+- Store, HAMMER, Portal, and their scene-local point-of-interest minimap markers now use `markerSize = 25` instead of the older `16`.

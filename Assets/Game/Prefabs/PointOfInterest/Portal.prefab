@@ -2548,7 +2548,7 @@ MonoBehaviour:
   iconGroup: 2
   markerShape: 3
   iconColor: {r: 0.2, g: 0.55, b: 1, a: 1}
-  markerSize: 16
+  markerSize: 25
   rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}
 --- !u!114 &901001001001001005

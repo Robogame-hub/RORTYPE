@@ -1401,7 +1401,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Player.PlayerResourceController
   maxAmmo: 999
   startingAmmo: 100
-  startingMoney: 0
+  startingMoney: 1000
   maxMoney: 999999
   maxHealth: 500
   startingHealth: 500

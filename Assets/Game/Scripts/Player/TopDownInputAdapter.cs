@@ -1,4 +1,6 @@
+using RorType.Gameplay.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
 
 namespace RorType.Gameplay.Player
 {
@@ -48,16 +50,25 @@ namespace RorType.Gameplay.Player
             InteractPressed = Input.GetKeyDown(ResolveInteractKey());
             JumpPressed = Input.GetKeyDown(jumpKey);
             DashPressed = Input.GetKeyDown(dashKey);
-            FireHeld = Input.GetMouseButton(fireMouseButton);
-            if (Input.GetMouseButtonDown(fireMouseButton))
+            var combatMouseBlocked = IsCombatMouseBlocked();
+            FireHeld = !combatMouseBlocked && Input.GetMouseButton(fireMouseButton);
+            if (!combatMouseBlocked && Input.GetMouseButtonDown(fireMouseButton))
             {
                 FirePressed = true;
             }
+            else if (combatMouseBlocked)
+            {
+                FirePressed = false;
+            }
 
-            MeleeHeld = Input.GetMouseButton(meleeMouseButton);
-            if (Input.GetMouseButtonDown(meleeMouseButton))
+            MeleeHeld = !combatMouseBlocked && Input.GetMouseButton(meleeMouseButton);
+            if (!combatMouseBlocked && Input.GetMouseButtonDown(meleeMouseButton))
             {
                 MeleePressed = true;
+            }
+            else if (combatMouseBlocked)
+            {
+                MeleePressed = false;
             }
 
             MouseScreenPosition = Input.mousePosition;
@@ -124,6 +135,17 @@ namespace RorType.Gameplay.Player
         private KeyCode ResolveInteractKey()
         {
             return interactKey == KeyCode.None ? KeyCode.E : interactKey;
+        }
+
+        private static bool IsCombatMouseBlocked()
+        {
+            if (PortalUiRuntime.IsChoiceOpen || ShopUiPanel.IsAnyOpen)
+            {
+                return true;
+            }
+
+            var eventSystem = EventSystem.current;
+            return eventSystem != null && eventSystem.IsPointerOverGameObject();
         }
     }
 }

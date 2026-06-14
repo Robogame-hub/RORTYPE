@@ -366,7 +366,7 @@ namespace RorType.Gameplay.Interaction
             if (kind == PickupKind.Money)
             {
                 resources.AddMoney(amount);
-                FloatingWorldText.Spawn(transform.position + Vector3.up * 0.6f, $"+{amount} gold", new Color(1f, 0.88f, 0.05f), 0.12f);
+                FloatingWorldText.Spawn(transform.position + Vector3.up * 0.6f, $"+{amount}G", new Color(1f, 0.88f, 0.05f), 0.12f);
             }
             else if (kind == PickupKind.Ammo)
             {
