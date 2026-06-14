@@ -563,3 +563,15 @@
 - Destructible cover is no longer a minimap point of interest. Doors are the accepted environment obstacle marker on the minimap: door markers are red rectangles, rotate with door yaw, and can scale from the tracked door's world X/Z bounds so their minimap length matches the authored door length.
 - Current active skill defaults are 5s cooldown for both radial burst and sticky bomb. Player radial burst projectiles are red like normal player shots. Sticky bomb is larger (`0.3` radius) and detonates later after sticking (`1.2s` fuse); its flight speed/lifetime/max-distance remain aligned with the normal player shot values.
 - Shooter projectile knockback is disabled (`shooterKnockbackForce = 0`), including radial shooter volleys, so shooter enemies can still damage the player but no longer push the player away with shots.
+- Shooter projectiles are now spawned with a trigger-only collider, preventing Rigidbody collision response from physically nudging the player even when explicit shooter knockback is zero.
+
+## 2026-06-15 minimap visible marker rule
+
+- The minimap runtime renders the player marker separately, but world marker slots are limited to `MinimapIconGroup.PointOfInterest`.
+- Doors remain valid minimap POI markers. Destructible environment objects (`DestructibleCover`, `DestructibleLootContainer`, and `ExplosiveBarrel`) are explicitly blocked from rendering even if a `MinimapTrackable` is accidentally added to them.
+- `MinimapBuilder` no longer configures chest, capsule, or enemy minimap markers and uses only player/POI trackables when calculating minimap bounds.
+
+## 2026-06-15 player hit feedback and fall threshold
+
+- `PlayerResourceController.ReceiveHit` now triggers a white multi-blink hit flash on the player's own visual renderers after any accepted non-player hit, including hits fully absorbed by shield. Runtime melee fist renderers are excluded so their attack color is not reset.
+- Player fall respawn/death threshold is now `7m` through `PlayerRespawnController.fallDistance`, serialized on `TopDownPlayer.prefab` and scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.

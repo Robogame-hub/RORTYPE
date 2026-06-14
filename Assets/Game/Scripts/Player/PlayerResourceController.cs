@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using RorType.Gameplay.Combat;
 using RorType.Gameplay.UI;
 using UnityEngine;
@@ -49,6 +51,11 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float startingMaxShield;
         [SerializeField, Min(0f)] private float startingShield;
 
+        [Header("Feedback")]
+        [SerializeField] private Color hitFlashColor = Color.white;
+        [SerializeField, Min(1)] private int hitFlashCount = 3;
+        [SerializeField, Min(0.01f)] private float hitFlashInterval = 0.05f;
+
         [Header("Stamina")]
         [SerializeField, Min(1f)] private float maxStamina = 100f;
         [SerializeField, Min(0f)] private float sprintDrainPerSecond = 10f;
@@ -57,6 +64,9 @@ namespace RorType.Gameplay.Player
 
         private float staminaRegenDelayTimer;
         private float maxHealthBonus;
+        private readonly List<Renderer> hitFlashRenderers = new();
+        private Color[] hitFlashBaseColors;
+        private Coroutine hitFlashRoutine;
 
         public int Ammo { get; private set; }
         public int MaxAmmo => maxAmmo;
@@ -91,6 +101,7 @@ namespace RorType.Gameplay.Player
         private void Awake()
         {
             NormalizeSettings();
+            CacheHitFlashRenderers();
 
             if (hasPersistentState)
             {
@@ -131,6 +142,9 @@ namespace RorType.Gameplay.Player
             {
                 ActivePlayer = null;
             }
+
+            StopHitFlash();
+            RestoreHitFlashColors();
         }
 
         private void Update()
@@ -324,6 +338,7 @@ namespace RorType.Gameplay.Player
                 FloatingWorldText.Spawn(transform.position + Vector3.up * 2.1f, $"-{remainingDamage:0} HP", Color.red, 0.14f);
             }
 
+            PlayHitFlash();
             SavePersistentState();
             return true;
         }
@@ -382,6 +397,121 @@ namespace RorType.Gameplay.Player
                 ExtraDashPurchased = HasExtraDashUpgrade
             };
             hasPersistentState = true;
+        }
+
+        private void CacheHitFlashRenderers()
+        {
+            hitFlashRenderers.Clear();
+            GetComponentsInChildren(true, hitFlashRenderers);
+            for (var i = hitFlashRenderers.Count - 1; i >= 0; i--)
+            {
+                var renderer = hitFlashRenderers[i];
+                if (renderer == null || IsTransientCombatRenderer(renderer))
+                {
+                    hitFlashRenderers.RemoveAt(i);
+                }
+            }
+
+            hitFlashBaseColors = new Color[hitFlashRenderers.Count];
+            for (var i = 0; i < hitFlashRenderers.Count; i++)
+            {
+                hitFlashBaseColors[i] = ResolveRendererBaseColor(hitFlashRenderers[i]);
+            }
+        }
+
+        private static bool IsTransientCombatRenderer(Renderer renderer)
+        {
+            var rendererName = renderer.name;
+            return string.Equals(rendererName, "LeftMeleeFist", StringComparison.Ordinal)
+                || string.Equals(rendererName, "RightMeleeFist", StringComparison.Ordinal);
+        }
+
+        private static Color ResolveRendererBaseColor(Renderer renderer)
+        {
+            if (renderer == null)
+            {
+                return Color.white;
+            }
+
+            var materials = renderer.sharedMaterials;
+            for (var i = 0; i < materials.Length; i++)
+            {
+                var material = materials[i];
+                if (material == null)
+                {
+                    continue;
+                }
+
+                if (material.HasProperty("_BaseColor"))
+                {
+                    return material.GetColor("_BaseColor");
+                }
+
+                if (material.HasProperty("_Color"))
+                {
+                    return material.GetColor("_Color");
+                }
+            }
+
+            return Color.white;
+        }
+
+        private void PlayHitFlash()
+        {
+            if (hitFlashRenderers.Count == 0)
+            {
+                CacheHitFlashRenderers();
+            }
+
+            if (hitFlashRoutine != null)
+            {
+                StopCoroutine(hitFlashRoutine);
+            }
+
+            hitFlashRoutine = StartCoroutine(PlayHitFlashRoutine());
+        }
+
+        private IEnumerator PlayHitFlashRoutine()
+        {
+            for (var i = 0; i < hitFlashCount; i++)
+            {
+                SetHitFlashColor(hitFlashColor);
+                yield return new WaitForSeconds(hitFlashInterval);
+                RestoreHitFlashColors();
+                yield return new WaitForSeconds(hitFlashInterval);
+            }
+
+            hitFlashRoutine = null;
+        }
+
+        private void StopHitFlash()
+        {
+            if (hitFlashRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(hitFlashRoutine);
+            hitFlashRoutine = null;
+        }
+
+        private void SetHitFlashColor(Color color)
+        {
+            for (var i = 0; i < hitFlashRenderers.Count; i++)
+            {
+                RuntimeRendererUtility.SetColor(hitFlashRenderers[i], color);
+            }
+        }
+
+        private void RestoreHitFlashColors()
+        {
+            for (var i = 0; i < hitFlashRenderers.Count; i++)
+            {
+                var color = hitFlashBaseColors != null && i < hitFlashBaseColors.Length
+                    ? hitFlashBaseColors[i]
+                    : Color.white;
+                RuntimeRendererUtility.SetColor(hitFlashRenderers[i], color);
+            }
         }
 
         private void OnValidate()
@@ -450,6 +580,8 @@ namespace RorType.Gameplay.Player
             startingMoney = Mathf.Clamp(startingMoney, 0, maxMoney);
             maxHealth = Mathf.Max(1f, maxHealth);
             startingHealth = Mathf.Clamp(startingHealth, 1f, maxHealth);
+            hitFlashCount = Mathf.Max(1, hitFlashCount);
+            hitFlashInterval = Mathf.Max(0.01f, hitFlashInterval);
             maxStamina = Mathf.Max(1f, maxStamina);
         }
     }

@@ -1,4 +1,5 @@
 using System;
+using RorType.Gameplay.Environment;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -46,6 +47,11 @@ namespace RorType.Gameplay.UI
                 if (trackable.IconGroup == MinimapIconGroup.Player)
                 {
                     playerTrackable ??= trackable;
+                    continue;
+                }
+
+                if (!ShouldDisplayWorldMarker(trackable))
+                {
                     continue;
                 }
 
@@ -161,6 +167,18 @@ namespace RorType.Gameplay.UI
         private static float GetYawDegrees(MinimapTrackable trackable)
         {
             return trackable.TrackedTransform.eulerAngles.y;
+        }
+
+        private static bool ShouldDisplayWorldMarker(MinimapTrackable trackable)
+        {
+            return trackable.IconGroup == MinimapIconGroup.PointOfInterest && !IsDestructibleMarker(trackable);
+        }
+
+        private static bool IsDestructibleMarker(MinimapTrackable trackable)
+        {
+            return trackable.GetComponentInParent<DestructibleCover>() != null ||
+                   trackable.GetComponentInParent<DestructibleLootContainer>() != null ||
+                   trackable.GetComponentInParent<ExplosiveBarrel>() != null;
         }
     }
 }

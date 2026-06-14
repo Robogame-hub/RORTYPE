@@ -13,20 +13,13 @@ namespace RorType.Gameplay.Editor
         private const string LevelScenePath = "Assets/Game/Scene/Level_1.unity";
         private const string MinimapPrefabPath = "Assets/Game/Prefabs/UI/Minimap.prefab";
         private const string LevelMapSpritePath = "Assets/Game/Minimap_var_2.png";
-        private const string TopDownPlayerPrefabPath = "Assets/Game/Prefabs/TopDownPlayer.prefab";
-        private const string HammerPrefabPath = "Assets/Game/Prefabs/HAMMER.prefab";
-        private const string StorePrefabPath = "Assets/Game/Prefabs/Store.prefab";
-        private const string CapsulePrefabPath = "Assets/Game/Prefabs/Capsule.prefab";
-        private const string PortalPrefabPath = "Assets/Game/Prefabs/Portal.prefab";
-        private const string ChestPrefabPath = "Assets/Game/Prefabs/Chest.prefab";
-        private const string EnemyShooterPrefabPath = "Assets/Game/Prefabs/Enemies/EnemyShooter.prefab";
-        private const string EnemyMeleePrefabPath = "Assets/Game/Prefabs/Enemies/EnemyMelee.prefab";
-        private const string EnemyExploderPrefabPath = "Assets/Game/Prefabs/Enemies/EnemyExploder.prefab";
+        private const string TopDownPlayerPrefabPath = "Assets/Game/Prefabs/Player/TopDownPlayer.prefab";
+        private const string HammerPrefabPath = "Assets/Game/Prefabs/PointOfInterest/HAMMER.prefab";
+        private const string StorePrefabPath = "Assets/Game/Prefabs/PointOfInterest/Store.prefab";
+        private const string PortalPrefabPath = "Assets/Game/Prefabs/PointOfInterest/Portal.prefab";
 
         private static readonly Color PlayerColor = new(0.15f, 0.9f, 0.25f, 1f);
-        private static readonly Color EnemyColor = new(0.95f, 0.2f, 0.2f, 1f);
         private static readonly Color PointOfInterestColor = new(0.2f, 0.55f, 1f, 1f);
-        private static readonly Color LootColor = new(0.2f, 0.55f, 1f, 1f);
 
         [MenuItem("RORTYPE/Build Minimap")]
         public static void BuildMinimap()
@@ -145,15 +138,10 @@ namespace RorType.Gameplay.Editor
 
         private static void ConfigureTrackablePrefabs()
         {
-            ConfigureTrackablePrefab(TopDownPlayerPrefabPath, MinimapIconGroup.Player, MinimapMarkerShape.Arrow, PlayerColor, 20f, true);
-            ConfigureTrackablePrefab(HammerPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 16f, false);
-            ConfigureTrackablePrefab(StorePrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 16f, false);
-            ConfigureTrackablePrefab(CapsulePrefabPath, MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false);
-            ConfigureTrackablePrefab(PortalPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 16f, false);
-            ConfigureTrackablePrefab(ChestPrefabPath, MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false);
-            ConfigureTrackablePrefab(EnemyShooterPrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
-            ConfigureTrackablePrefab(EnemyMeleePrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
-            ConfigureTrackablePrefab(EnemyExploderPrefabPath, MinimapIconGroup.Enemy, MinimapMarkerShape.Cross, EnemyColor, 14f, false);
+            ConfigureTrackablePrefab(TopDownPlayerPrefabPath, MinimapIconGroup.Player, MinimapMarkerShape.Circle, PlayerColor, 20f, false);
+            ConfigureTrackablePrefab(HammerPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 25f, false);
+            ConfigureTrackablePrefab(StorePrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 25f, false);
+            ConfigureTrackablePrefab(PortalPrefabPath, MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 25f, false);
         }
 
         private static void ConfigureTrackablePrefab(
@@ -236,6 +224,11 @@ namespace RorType.Gameplay.Editor
                     continue;
                 }
 
+                if (!ShouldUseForMinimapBounds(trackable))
+                {
+                    continue;
+                }
+
                 var position = trackable.TrackedTransform.position + trackable.WorldOffset;
                 var point = new Vector2(position.x, position.z);
                 if (!hasAny)
@@ -261,14 +254,18 @@ namespace RorType.Gameplay.Editor
             return new Bounds2D((min + max) * 0.5f, size);
         }
 
+        private static bool ShouldUseForMinimapBounds(MinimapTrackable trackable)
+        {
+            return trackable.IconGroup == MinimapIconGroup.Player ||
+                   trackable.IconGroup == MinimapIconGroup.PointOfInterest;
+        }
+
         private static void EnsureSceneTrackables(Scene scene)
         {
-            EnsureSceneTrackable(scene, "TopDownPlayer", MinimapIconGroup.Player, MinimapMarkerShape.Arrow, PlayerColor, 20f, true, false);
-            EnsureSceneTrackable(scene, "HAMMER", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 16f, false, true);
-            EnsureSceneTrackable(scene, "Store", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 16f, false, false);
-            EnsureSceneTrackable(scene, "Portal", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 16f, false, false);
-            EnsureSceneTrackable(scene, "Chest", MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false, true);
-            EnsureSceneTrackable(scene, "Capsule", MinimapIconGroup.Loot, MinimapMarkerShape.Cross, LootColor, 14f, false, true);
+            EnsureSceneTrackable(scene, "TopDownPlayer", MinimapIconGroup.Player, MinimapMarkerShape.Circle, PlayerColor, 20f, false, false);
+            EnsureSceneTrackable(scene, "HAMMER", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Triangle, PointOfInterestColor, 25f, false, true);
+            EnsureSceneTrackable(scene, "Store", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Square, PointOfInterestColor, 25f, false, false);
+            EnsureSceneTrackable(scene, "Portal", MinimapIconGroup.PointOfInterest, MinimapMarkerShape.Circle, PointOfInterestColor, 25f, false, false);
         }
 
         private static void EnsureSceneTrackable(

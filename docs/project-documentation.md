@@ -671,3 +671,19 @@ This section supersedes the older ammo-only chest/capsule description above.
 - Skill 2 is sticky bomb: `Alpha2`, `5s` cooldown, a larger purple player-style projectile (`0.3` radius) that sticks to enemies or non-trigger surfaces, waits `1.2s`, then explodes with exploder-style values: `30` damage, `2m` damage radius, `3m` visual radius, and `4.8` impulse.
 - `Assets/Game/Scripts/Player/StickyBombProjectile.cs` handles the sticky projectile lifetime, stick-to-target parenting, explosion damage, and transient purple explosion visual.
 - `PlayerStatusUiRuntime` shows two square skill slots above the dash charge row. Each slot shows its key label and, while cooling down, a numeric countdown on the square.
+
+## Current minimap marker visibility on 2026-06-15
+
+This supersedes older minimap notes that listed enemies, chests, capsules, or destructible objects as visible world markers.
+
+- `MinimapController` still draws the player marker through its dedicated player marker slot.
+- General minimap marker slots render only `MinimapIconGroup.PointOfInterest`.
+- Doors are accepted point-of-interest markers and remain visible as red, yaw-rotating rectangular markers that can scale from world bounds.
+- Destructible environment objects must not appear on the minimap. The runtime explicitly blocks `DestructibleCover`, `DestructibleLootContainer`, and `ExplosiveBarrel` markers even if a `MinimapTrackable` is accidentally added to one of those objects.
+- `MinimapBuilder` no longer configures enemy, chest, or capsule markers and uses only player/point-of-interest trackables for minimap bounds.
+
+## Current player hit feedback and fall threshold on 2026-06-15
+
+- `PlayerResourceController.ReceiveHit` deducts shield/health, spawns the existing floating shield/HP damage text, and now also flashes the player's visual renderers white after any accepted non-player hit.
+- Player hit flashing excludes runtime melee fist renderers so attack visuals keep their configured red color after the flash.
+- `PlayerRespawnController.fallDistance` is now `7m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.

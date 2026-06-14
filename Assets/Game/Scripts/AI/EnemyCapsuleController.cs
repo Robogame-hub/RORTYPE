@@ -518,6 +518,11 @@ namespace RorType.Gameplay.AI
             projectile.AddComponent<Rigidbody>();
             var projectileSphere = projectile.AddComponent<EnemyProjectileSphere>();
 
+            if (projectileCollider != null)
+            {
+                projectileCollider.isTrigger = true;
+            }
+
             if (projectileRenderer != null)
             {
                 RuntimeRendererUtility.SetColor(projectileRenderer, shooterProjectileColor);

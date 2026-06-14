@@ -1422,7 +1422,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 08ed9e55030745ab80df4a46de88f20a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  fallDistance: 6
+  fallDistance: 7
   safePointMinDistance: 1.5
   respawnHeightOffset: 1.05
 --- !u!114 &300100016
@@ -1443,6 +1443,9 @@ MonoBehaviour:
   maxMoney: 999999
   maxHealth: 500
   startingHealth: 500
+  hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
+  hitFlashCount: 3
+  hitFlashInterval: 0.05
   maxStamina: 100
   sprintDrainPerSecond: 10
   staminaRegenPerSecond: 35
