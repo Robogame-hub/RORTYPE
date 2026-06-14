@@ -531,3 +531,8 @@
 ## 2026-06-13 minimap POI marker size note
 
 - Store, HAMMER, Portal, and their scene-local point-of-interest minimap markers now use `markerSize = 25` instead of the older `16`.
+
+## 2026-06-14 destructible tree copy note
+
+- `Assets/Game/Prefabs/Environment/Tree.prefab` remains the ordinary non-destructible tree prefab.
+- `Assets/Game/Prefabs/Environment/Distructable.prefab` is the destructible tree copy. It uses `DestructibleLootContainer` on the root with `maxHealth = 10`, a root kinematic Rigidbody, convex child `MeshCollider` debris pieces, and the same material as `DestructibleCover.prefab`.
