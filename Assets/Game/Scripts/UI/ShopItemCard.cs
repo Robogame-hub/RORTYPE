@@ -158,6 +158,21 @@ namespace RorType.Gameplay.UI
             {
                 button = GetComponent<Button>();
             }
+
+            var uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            EnsureFont(iconLabel, uiFont);
+            EnsureFont(nameLabel, uiFont);
+            EnsureFont(detailLabel, uiFont);
+            EnsureFont(priceLabel, uiFont);
+            EnsureFont(summaryLabel, uiFont);
+        }
+
+        private static void EnsureFont(Text label, Font font)
+        {
+            if (label != null && label.font == null)
+            {
+                label.font = font;
+            }
         }
 
         private static string FormatSummary(string icon, string itemName, string detail, string price)

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace RorType.Gameplay.UI
@@ -39,20 +38,27 @@ namespace RorType.Gameplay.UI
         }
 
         private static PortalUiRuntime instance;
+        private static bool missingUiWarned;
 
         private readonly List<ChoiceButton> choiceButtons = new();
-        private Canvas canvas;
-        private GameObject promptRoot;
-        private Text promptLabel;
-        private GameObject choiceRoot;
-        private Text choiceTitle;
-        private RectTransform choiceButtonContainer;
+        [SerializeField] private GameObject promptRoot;
+        [SerializeField] private Text promptLabel;
+        [SerializeField] private GameObject choiceRoot;
+        [SerializeField] private Text choiceTitle;
+        [SerializeField] private Button[] choiceButtonsAuthored = Array.Empty<Button>();
+        [SerializeField] private Text[] choiceLabelsAuthored = Array.Empty<Text>();
 
         public static bool IsChoiceOpen => instance != null && instance.choiceRoot != null && instance.choiceRoot.activeSelf;
 
         public static void ShowPrompt(string promptText)
         {
-            var runtime = EnsureInstance();
+            var runtime = ResolveInstance();
+            if (runtime == null)
+            {
+                WarnMissingUi();
+                return;
+            }
+
             runtime.SetPromptVisible(!string.IsNullOrWhiteSpace(promptText));
             if (runtime.promptLabel != null)
             {
@@ -77,7 +83,13 @@ namespace RorType.Gameplay.UI
                 return;
             }
 
-            var runtime = EnsureInstance();
+            var runtime = ResolveInstance();
+            if (runtime == null)
+            {
+                WarnMissingUi();
+                return;
+            }
+
             runtime.BuildChoiceUi(title, options);
         }
 
@@ -91,17 +103,14 @@ namespace RorType.Gameplay.UI
             instance.choiceRoot.SetActive(false);
         }
 
-        private static PortalUiRuntime EnsureInstance()
+        private static PortalUiRuntime ResolveInstance()
         {
             if (instance != null)
             {
                 return instance;
             }
 
-            var runtimeObject = new GameObject("PortalUiRuntime");
-            DontDestroyOnLoad(runtimeObject);
-            instance = runtimeObject.AddComponent<PortalUiRuntime>();
-            instance.BuildUi();
+            instance = FindFirstObjectByType<PortalUiRuntime>(FindObjectsInactive.Include);
             return instance;
         }
 
@@ -114,8 +123,18 @@ namespace RorType.Gameplay.UI
             }
 
             instance = this;
-            DontDestroyOnLoad(gameObject);
-            BuildUi();
+            CacheAuthoredChoiceButtons();
+            EnsureAuthoredFonts();
+            HidePrompt();
+            HideChoice();
+        }
+
+        private void OnDestroy()
+        {
+            if (instance == this)
+            {
+                instance = null;
+            }
         }
 
         private void Update()
@@ -150,65 +169,53 @@ namespace RorType.Gameplay.UI
             return choiceButton?.Callback?.Invoke() ?? false;
         }
 
-        private void BuildUi()
+        private void CacheAuthoredChoiceButtons()
         {
-            if (canvas != null)
+            choiceButtons.Clear();
+            var count = Mathf.Min(
+                choiceButtonsAuthored != null ? choiceButtonsAuthored.Length : 0,
+                choiceLabelsAuthored != null ? choiceLabelsAuthored.Length : 0);
+            for (var index = 0; index < count; index++)
             {
-                return;
+                var button = choiceButtonsAuthored[index];
+                var label = choiceLabelsAuthored[index];
+                if (button == null || label == null)
+                {
+                    continue;
+                }
+
+                choiceButtons.Add(new ChoiceButton
+                {
+                    Root = button.gameObject,
+                    Button = button,
+                    Label = label
+                });
+                button.gameObject.SetActive(false);
             }
+        }
 
-            EnsureEventSystem();
+        private void EnsureAuthoredFonts()
+        {
             var uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-
-            var canvasObject = new GameObject("Portal Canvas");
-            canvasObject.transform.SetParent(transform, false);
-            canvas = canvasObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 500;
-            canvasObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            canvasObject.AddComponent<GraphicRaycaster>();
-
-            promptRoot = CreatePanel("Portal Prompt", canvas.transform, new Vector2(0.5f, 0.13f), new Vector2(300f, 56f), new Color(0f, 0f, 0f, 0.72f));
-            promptLabel = CreateLabel("Prompt Label", promptRoot.transform, uiFont, 24, TextAnchor.MiddleCenter, Color.white);
-            promptLabel.rectTransform.anchorMin = Vector2.zero;
-            promptLabel.rectTransform.anchorMax = Vector2.one;
-            promptLabel.rectTransform.offsetMin = new Vector2(12f, 8f);
-            promptLabel.rectTransform.offsetMax = new Vector2(-12f, -8f);
-            promptRoot.SetActive(false);
-
-            choiceRoot = CreatePanel("Portal Choice", canvas.transform, new Vector2(0.5f, 0.5f), new Vector2(420f, 280f), new Color(0.03f, 0.05f, 0.08f, 0.92f));
-            choiceTitle = CreateLabel("Choice Title", choiceRoot.transform, uiFont, 26, TextAnchor.MiddleCenter, Color.white);
-            choiceTitle.rectTransform.anchorMin = new Vector2(0f, 1f);
-            choiceTitle.rectTransform.anchorMax = new Vector2(1f, 1f);
-            choiceTitle.rectTransform.pivot = new Vector2(0.5f, 1f);
-            choiceTitle.rectTransform.sizeDelta = new Vector2(0f, 40f);
-            choiceTitle.rectTransform.anchoredPosition = new Vector2(0f, -24f);
-
-            var buttonContainer = new GameObject("Buttons", typeof(RectTransform), typeof(VerticalLayoutGroup));
-            buttonContainer.transform.SetParent(choiceRoot.transform, false);
-            choiceButtonContainer = buttonContainer.GetComponent<RectTransform>();
-            choiceButtonContainer.anchorMin = new Vector2(0f, 0f);
-            choiceButtonContainer.anchorMax = new Vector2(1f, 1f);
-            choiceButtonContainer.offsetMin = new Vector2(28f, 28f);
-            choiceButtonContainer.offsetMax = new Vector2(-28f, -76f);
-
-            var layoutGroup = buttonContainer.GetComponent<VerticalLayoutGroup>();
-            layoutGroup.spacing = 12f;
-            layoutGroup.childAlignment = TextAnchor.UpperCenter;
-            layoutGroup.childControlHeight = false;
-            layoutGroup.childControlWidth = true;
-            layoutGroup.childForceExpandHeight = false;
-            layoutGroup.childForceExpandWidth = true;
-
-            choiceRoot.SetActive(false);
+            EnsureFont(promptLabel, uiFont);
+            EnsureFont(choiceTitle, uiFont);
+            for (var index = 0; index < choiceButtons.Count; index++)
+            {
+                EnsureFont(choiceButtons[index].Label, uiFont);
+            }
         }
 
         private void BuildChoiceUi(string title, IReadOnlyList<ChoiceOption> options)
         {
+            if (choiceRoot == null || choiceTitle == null || choiceButtons.Count == 0)
+            {
+                Debug.LogWarning($"Portal UI in scene '{gameObject.scene.name}' is missing authored choice references.", this);
+                return;
+            }
+
             HidePrompt();
             choiceRoot.SetActive(true);
             choiceTitle.text = title ?? "Portal";
-            EnsureChoiceButtonCount(options.Count);
 
             for (var index = 0; index < choiceButtons.Count; index++)
             {
@@ -226,45 +233,10 @@ namespace RorType.Gameplay.UI
                 button.Button.onClick.RemoveAllListeners();
                 button.Button.onClick.AddListener(() => { InvokeChoice(button); });
             }
-        }
 
-        private void EnsureChoiceButtonCount(int count)
-        {
-            var uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            while (choiceButtons.Count < count)
+            if (options.Count > choiceButtons.Count)
             {
-                var buttonRoot = new GameObject(
-                    $"Choice Button {choiceButtons.Count + 1}",
-                    typeof(RectTransform),
-                    typeof(Image),
-                    typeof(Button));
-                buttonRoot.transform.SetParent(choiceButtonContainer, false);
-
-                var rectTransform = buttonRoot.GetComponent<RectTransform>();
-                rectTransform.sizeDelta = new Vector2(0f, 48f);
-
-                var image = buttonRoot.GetComponent<Image>();
-                image.color = new Color(0.13f, 0.22f, 0.31f, 1f);
-
-                var button = buttonRoot.GetComponent<Button>();
-                var colors = button.colors;
-                colors.normalColor = image.color;
-                colors.highlightedColor = new Color(0.2f, 0.32f, 0.43f, 1f);
-                colors.pressedColor = new Color(0.08f, 0.14f, 0.2f, 1f);
-                button.colors = colors;
-
-                var label = CreateLabel("Label", buttonRoot.transform, uiFont, 22, TextAnchor.MiddleCenter, Color.white);
-                label.rectTransform.anchorMin = Vector2.zero;
-                label.rectTransform.anchorMax = Vector2.one;
-                label.rectTransform.offsetMin = new Vector2(8f, 4f);
-                label.rectTransform.offsetMax = new Vector2(-8f, -4f);
-
-                choiceButtons.Add(new ChoiceButton
-                {
-                    Root = buttonRoot,
-                    Button = button,
-                    Label = label
-                });
+                Debug.LogWarning($"Portal UI has {choiceButtons.Count} authored buttons but needs {options.Count}. Add more button slots to the scene UI.", this);
             }
         }
 
@@ -276,46 +248,23 @@ namespace RorType.Gameplay.UI
             }
         }
 
-        private void EnsureEventSystem()
+        private static void WarnMissingUi()
         {
-            if (FindFirstObjectByType<EventSystem>() != null)
+            if (missingUiWarned)
             {
                 return;
             }
 
-            var eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            DontDestroyOnLoad(eventSystem);
+            missingUiWarned = true;
+            Debug.LogWarning("No scene-authored PortalUiRuntime found. Add Assets/Game/Prefabs/UI/InteractionUi.prefab to the active scene.");
         }
 
-        private static GameObject CreatePanel(string objectName, Transform parent, Vector2 anchor, Vector2 size, Color color)
+        private static void EnsureFont(Text label, Font font)
         {
-            var panel = new GameObject(objectName, typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(parent, false);
-
-            var rectTransform = panel.GetComponent<RectTransform>();
-            rectTransform.anchorMin = anchor;
-            rectTransform.anchorMax = anchor;
-            rectTransform.pivot = anchor;
-            rectTransform.sizeDelta = size;
-            rectTransform.anchoredPosition = Vector2.zero;
-
-            panel.GetComponent<Image>().color = color;
-            return panel;
-        }
-
-        private static Text CreateLabel(string objectName, Transform parent, Font font, int fontSize, TextAnchor alignment, Color color)
-        {
-            var labelObject = new GameObject(objectName, typeof(RectTransform), typeof(Text));
-            labelObject.transform.SetParent(parent, false);
-
-            var label = labelObject.GetComponent<Text>();
-            label.font = font;
-            label.fontSize = fontSize;
-            label.alignment = alignment;
-            label.color = color;
-            label.horizontalOverflow = HorizontalWrapMode.Wrap;
-            label.verticalOverflow = VerticalWrapMode.Overflow;
-            return label;
+            if (label != null && label.font == null)
+            {
+                label.font = font;
+            }
         }
     }
 }

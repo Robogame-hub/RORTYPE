@@ -499,11 +499,11 @@
 - `ShopInteractable` does not create trigger colliders at runtime. Stores/blacksmiths must have authored trigger colliders and an authored/scene-available `ShopUiPanel`.
 - Portal interaction remains `ScenePortal` + `ScenePortalInteractionController`; shop interaction is resolved separately after portals and still requires pressing `E` before opening the shop UI.
 
-## 2026-06-13 shop UI fallback fix
+## 2026-06-13 shop UI fallback fix (superseded)
 
-- `ShopInteractable` now falls back to `ShopUiPanel.GetOrCreateDefault()` when its serialized `shopUi` reference is empty and no scene panel is registered.
-- `ShopUiPanel` can create a minimal runtime canvas/panel/card grid for incomplete scenes, so pressing `E` near `Store` or `HAMMER` opens a purchase menu instead of only logging a missing UI warning.
-- Authored `ShopUiPanel`/`ShopItemCard` scene UI remains preferred for final presentation, but the runtime fallback is accepted as the safety path for old scenes and prefabs.
+- Superseded implementation detail: `ShopInteractable` previously fell back to `ShopUiPanel.GetOrCreateDefault()` when its serialized `shopUi` reference was empty and no scene panel was registered.
+- Superseded implementation detail: `ShopUiPanel` previously created a minimal runtime canvas/panel/card grid for incomplete scenes. Current accepted behavior is to require `Assets/Game/Prefabs/UI/InteractionUi.prefab` in each scene and log a missing-UI warning instead of generating shop UI.
+- Authored `ShopUiPanel`/`ShopItemCard` scene UI is the required final presentation path.
 
 ## 2026-06-13 shop ammo and one-shot refresh note
 
@@ -588,3 +588,9 @@
 - The overlay is rendered by runtime duplicate mesh renderers using `Assets/Game/Resources/Materials/PlayerGhostFresnel.mat` and `Assets/Game/Shaders/PlayerGhostFresnel.shader`, with `ZTest Always` so the silhouette remains visible through tall obstacles.
 - `PlayerResourceController` auto-adds `PlayerOcclusionGhost` at runtime, because current gameplay scenes use manually authored scene-local player objects rather than relying only on the `TopDownPlayer` prefab.
 - Player hit flashing excludes `OcclusionGhostOverlay*` renderers so damage feedback does not overwrite the ghost material.
+
+## 2026-06-15 authored interaction UI note
+
+- `Assets/Game/Prefabs/UI/InteractionUi.prefab` is the authored scene UI for portal/interact prompts, portal destination buttons, and shop cards. It is placed as a prefab instance in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+- `PortalUiRuntime` and `ShopUiPanel` must not create Canvas, EventSystem, panels, buttons, or shop cards at runtime. Missing scene-authored interaction UI should produce a warning instead of fallback generation.
+- `FloatingWorldText` now enforces a larger readable minimum scale (`0.3`) and bold text so gold/ammo/HP pickup numbers are visible when they fly out of pickups.

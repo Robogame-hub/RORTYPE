@@ -134,7 +134,13 @@ namespace RorType.Gameplay.Interaction
 
             if (shopUi == null)
             {
-                shopUi = ShopUiPanel.GetOrCreateDefault();
+                shopUi = ShopUiPanel.ResolveDefault();
+            }
+
+            if (shopUi == null)
+            {
+                Debug.LogWarning($"Shop '{name}' cannot open because the scene has no authored ShopUiPanel.", this);
+                return;
             }
 
             var entries = BuildEntries(resources);

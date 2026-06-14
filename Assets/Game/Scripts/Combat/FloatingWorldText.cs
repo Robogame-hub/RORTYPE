@@ -9,6 +9,7 @@ namespace RorType.Gameplay.Combat
         [SerializeField, Min(0.01f)] private float lifetime = 0.6f;
         [SerializeField, Min(0f)] private float riseSpeed = 1.45f;
         [SerializeField, Min(0f)] private float fadeSharpness = 10f;
+        [SerializeField, Min(0.01f)] private float minimumReadableScale = 0.3f;
 
         private TextMesh textMesh;
         private Color baseColor = Color.white;
@@ -23,7 +24,8 @@ namespace RorType.Gameplay.Combat
             textMesh.anchor = TextAnchor.MiddleCenter;
             textMesh.alignment = TextAlignment.Center;
             textMesh.fontSize = 64;
-            textMesh.characterSize = 0.1f;
+            textMesh.characterSize = 0.13f;
+            textMesh.fontStyle = FontStyle.Bold;
 
             textObject.AddComponent<WorldBillboard>();
             var floatingText = textObject.AddComponent<FloatingWorldText>();
@@ -46,7 +48,7 @@ namespace RorType.Gameplay.Combat
             textMesh.text = content;
             textMesh.color = color;
             baseColor = color;
-            transform.localScale = Vector3.one * Mathf.Max(0.01f, scale);
+            transform.localScale = Vector3.one * Mathf.Max(minimumReadableScale, scale);
             age = 0f;
             CombatRuntimeBudget.Register(gameObject, CombatRuntimeObjectKind.FloatingText);
         }

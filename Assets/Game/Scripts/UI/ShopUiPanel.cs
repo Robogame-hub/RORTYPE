@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace RorType.Gameplay.UI
@@ -30,6 +29,7 @@ namespace RorType.Gameplay.UI
 
         private static ShopUiPanel activePanel;
         private static ShopUiPanel defaultPanel;
+        private static bool missingUiWarned;
 
         [SerializeField] private GameObject root;
         [SerializeField] private Text titleLabel;
@@ -44,26 +44,27 @@ namespace RorType.Gameplay.UI
         public static ShopUiPanel DefaultPanel => defaultPanel;
         public bool IsOpen => root != null && root.activeSelf;
 
-        public static ShopUiPanel GetOrCreateDefault()
+        public static ShopUiPanel ResolveDefault()
         {
             if (defaultPanel != null)
             {
                 return defaultPanel;
             }
 
-            var panelObject = new GameObject("ShopUiRuntime");
-            DontDestroyOnLoad(panelObject);
-            return panelObject.AddComponent<ShopUiPanel>();
+            defaultPanel = FindFirstObjectByType<ShopUiPanel>(FindObjectsInactive.Include);
+            if (defaultPanel == null && !missingUiWarned)
+            {
+                missingUiWarned = true;
+                Debug.LogWarning("No scene-authored ShopUiPanel found. Add Assets/Game/Prefabs/UI/InteractionUi.prefab to the active scene.");
+            }
+
+            return defaultPanel;
         }
 
         private void Awake()
         {
-            if (root == null)
-            {
-                BuildRuntimeUi();
-            }
-
             RegisterDefaultPanel();
+            EnsureAuthoredFonts();
             Hide();
         }
 
@@ -105,6 +106,12 @@ namespace RorType.Gameplay.UI
         {
             if (entries == null || entries.Count == 0)
             {
+                return;
+            }
+
+            if (root == null || cards == null || cards.Length == 0)
+            {
+                Debug.LogWarning($"Shop UI in scene '{gameObject.scene.name}' is missing authored root or card references.", this);
                 return;
             }
 
@@ -245,135 +252,20 @@ namespace RorType.Gameplay.UI
             }
         }
 
-        private void BuildRuntimeUi()
+        private void EnsureAuthoredFonts()
         {
-            EnsureEventSystem();
             var uiFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            EnsureFont(titleLabel, uiFont);
+            EnsureFont(feedbackLabel, uiFont);
+            EnsureFont(tooltipLabel, uiFont);
+        }
 
-            var canvasObject = new GameObject("Shop Canvas");
-            canvasObject.transform.SetParent(transform, false);
-            var canvas = canvasObject.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 700;
-            canvasObject.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            canvasObject.AddComponent<GraphicRaycaster>();
-
-            root = CreatePanel("Shop Panel", canvasObject.transform, new Vector2(0.5f, 0.5f), new Vector2(620f, 440f), new Color(0.025f, 0.03f, 0.035f, 0.94f));
-
-            titleLabel = CreateLabel("Title", root.transform, uiFont, 28, TextAnchor.MiddleCenter, Color.white);
-            titleLabel.rectTransform.anchorMin = new Vector2(0f, 1f);
-            titleLabel.rectTransform.anchorMax = new Vector2(1f, 1f);
-            titleLabel.rectTransform.pivot = new Vector2(0.5f, 1f);
-            titleLabel.rectTransform.sizeDelta = new Vector2(0f, 44f);
-            titleLabel.rectTransform.anchoredPosition = new Vector2(0f, -18f);
-
-            feedbackLabel = CreateLabel("Feedback", root.transform, uiFont, 18, TextAnchor.MiddleCenter, new Color(1f, 0.86f, 0.08f, 1f));
-            feedbackLabel.rectTransform.anchorMin = new Vector2(0f, 0f);
-            feedbackLabel.rectTransform.anchorMax = new Vector2(1f, 0f);
-            feedbackLabel.rectTransform.pivot = new Vector2(0.5f, 0f);
-            feedbackLabel.rectTransform.sizeDelta = new Vector2(0f, 30f);
-            feedbackLabel.rectTransform.anchoredPosition = new Vector2(0f, 16f);
-
-            var gridObject = new GameObject("Cards", typeof(RectTransform), typeof(GridLayoutGroup));
-            gridObject.transform.SetParent(root.transform, false);
-            var gridTransform = gridObject.GetComponent<RectTransform>();
-            gridTransform.anchorMin = Vector2.zero;
-            gridTransform.anchorMax = Vector2.one;
-            gridTransform.offsetMin = new Vector2(28f, 58f);
-            gridTransform.offsetMax = new Vector2(-28f, -78f);
-
-            var grid = gridObject.GetComponent<GridLayoutGroup>();
-            grid.cellSize = new Vector2(174f, 104f);
-            grid.spacing = new Vector2(18f, 18f);
-            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
-            grid.constraintCount = 3;
-            grid.childAlignment = TextAnchor.UpperCenter;
-
-            cards = new ShopItemCard[9];
-            for (var i = 0; i < cards.Length; i++)
+        private static void EnsureFont(Text label, Font font)
+        {
+            if (label != null && label.font == null)
             {
-                cards[i] = CreateRuntimeCard($"Shop Card {i + 1}", gridObject.transform, uiFont);
+                label.font = font;
             }
-
-            tooltipRoot = CreatePanel("Tooltip", root.transform, new Vector2(0.5f, 0f), new Vector2(560f, 42f), new Color(0.08f, 0.1f, 0.12f, 0.96f));
-            var tooltipTransform = tooltipRoot.GetComponent<RectTransform>();
-            tooltipTransform.anchoredPosition = new Vector2(0f, -52f);
-            tooltipLabel = CreateLabel("Tooltip Label", tooltipRoot.transform, uiFont, 16, TextAnchor.MiddleCenter, Color.white);
-            tooltipLabel.rectTransform.anchorMin = Vector2.zero;
-            tooltipLabel.rectTransform.anchorMax = Vector2.one;
-            tooltipLabel.rectTransform.offsetMin = new Vector2(12f, 4f);
-            tooltipLabel.rectTransform.offsetMax = new Vector2(-12f, -4f);
-            tooltipRoot.SetActive(false);
-        }
-
-        private static ShopItemCard CreateRuntimeCard(string objectName, Transform parent, Font font)
-        {
-            var cardObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Button), typeof(ShopItemCard));
-            cardObject.transform.SetParent(parent, false);
-
-            var image = cardObject.GetComponent<Image>();
-            image.color = new Color(0.11f, 0.14f, 0.16f, 1f);
-
-            var button = cardObject.GetComponent<Button>();
-            var colors = button.colors;
-            colors.normalColor = image.color;
-            colors.highlightedColor = new Color(0.18f, 0.23f, 0.26f, 1f);
-            colors.pressedColor = new Color(0.06f, 0.08f, 0.09f, 1f);
-            button.colors = colors;
-
-            var label = CreateLabel("Summary", cardObject.transform, font, 17, TextAnchor.MiddleCenter, Color.white);
-            label.supportRichText = true;
-            label.rectTransform.anchorMin = Vector2.zero;
-            label.rectTransform.anchorMax = Vector2.one;
-            label.rectTransform.offsetMin = new Vector2(8f, 8f);
-            label.rectTransform.offsetMax = new Vector2(-8f, -8f);
-
-            var card = cardObject.GetComponent<ShopItemCard>();
-            card.ConfigureRuntime(button, label);
-            cardObject.SetActive(false);
-            return card;
-        }
-
-        private static void EnsureEventSystem()
-        {
-            if (FindFirstObjectByType<EventSystem>() != null)
-            {
-                return;
-            }
-
-            var eventSystem = new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
-            DontDestroyOnLoad(eventSystem);
-        }
-
-        private static GameObject CreatePanel(string objectName, Transform parent, Vector2 anchor, Vector2 size, Color color)
-        {
-            var panel = new GameObject(objectName, typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(parent, false);
-
-            var rectTransform = panel.GetComponent<RectTransform>();
-            rectTransform.anchorMin = anchor;
-            rectTransform.anchorMax = anchor;
-            rectTransform.pivot = anchor;
-            rectTransform.sizeDelta = size;
-            rectTransform.anchoredPosition = Vector2.zero;
-
-            panel.GetComponent<Image>().color = color;
-            return panel;
-        }
-
-        private static Text CreateLabel(string objectName, Transform parent, Font font, int fontSize, TextAnchor alignment, Color color)
-        {
-            var labelObject = new GameObject(objectName, typeof(RectTransform), typeof(Text));
-            labelObject.transform.SetParent(parent, false);
-
-            var label = labelObject.GetComponent<Text>();
-            label.font = font;
-            label.fontSize = fontSize;
-            label.alignment = alignment;
-            label.color = color;
-            label.horizontalOverflow = HorizontalWrapMode.Wrap;
-            label.verticalOverflow = VerticalWrapMode.Overflow;
-            return label;
         }
     }
 }
