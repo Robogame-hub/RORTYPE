@@ -692,5 +692,5 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 
 - `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` implements a pressure-triggered moving lift for manually authored scene placement.
 - `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab` contains a yellow solid deck, a red/green pressure button trigger on the deck, a point light indicator, and a kinematic Rigidbody root.
-- Default behavior matches the accepted prototype requirement: stepping onto the platform button raises the elevator by `5m`; leaving the platform trigger starts a `3s` return delay; after the delay the elevator moves back down.
+- Default behavior matches the accepted prototype requirement: stepping onto the platform button raises the elevator by inspector-configured `liftHeightMeters` (`5m` by default); leaving the platform trigger starts a `3s` return delay; after the delay the elevator moves back down.
 - While the player remains inside the pressure trigger, the elevator applies its movement delta to the player's Rigidbody root, keeping the current `TopDownPlayerMotor` riding with the moving platform.

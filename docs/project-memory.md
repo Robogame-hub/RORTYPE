@@ -579,5 +579,5 @@
 ## 2026-06-15 elevator platform note
 
 - Elevator gameplay lives in `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` and the placeable prefab is `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab`.
-- The elevator is a kinematic Rigidbody platform with an authored pressure-button trigger on the platform. When a player stands on the trigger, it moves up by `5m`; after the last player leaves the platform trigger, it waits `3s` and returns down.
+- The elevator is a kinematic Rigidbody platform with an authored pressure-button trigger on the platform. When a player stands on the trigger, it moves up by the inspector-configured `liftHeightMeters` value (`5m` by default); after the last player leaves the platform trigger, it waits `3s` and returns down.
 - `ElevatorPlatform` carries player Rigidbody roots by the platform movement delta while they are inside the pressure trigger, so the current `TopDownPlayerMotor` does not get left behind during vertical lift movement.

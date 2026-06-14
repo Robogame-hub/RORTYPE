@@ -11,7 +11,7 @@ namespace RorType.Gameplay.Interaction
         [SerializeField] private Rigidbody movingBody;
         [SerializeField] private Renderer[] indicatorRenderers = System.Array.Empty<Renderer>();
         [SerializeField] private Light[] indicatorLights = System.Array.Empty<Light>();
-        [SerializeField] private Vector3 travelLocalOffset = Vector3.up * 5f;
+        [SerializeField, Min(0f)] private float liftHeightMeters = 5f;
         [SerializeField, Min(0.01f)] private float moveSpeed = 3f;
         [SerializeField, Min(0.01f)] private float returnSpeed = 4f;
         [SerializeField, Min(0f)] private float returnDelayAfterExit = 3f;
@@ -161,7 +161,7 @@ namespace RorType.Gameplay.Interaction
 
         private Vector3 GetTargetLocalPosition()
         {
-            return loweredLocalPosition + (wantsRaised ? travelLocalOffset : Vector3.zero);
+            return loweredLocalPosition + (wantsRaised ? Vector3.up * liftHeightMeters : Vector3.zero);
         }
 
         private void CarryPlayers(Vector3 worldDelta)
@@ -324,6 +324,7 @@ namespace RorType.Gameplay.Interaction
             moveSpeed = Mathf.Max(0.01f, moveSpeed);
             returnSpeed = Mathf.Max(0.01f, returnSpeed);
             returnDelayAfterExit = Mathf.Max(0f, returnDelayAfterExit);
+            liftHeightMeters = Mathf.Max(0f, liftHeightMeters);
             ResolveReferences();
             ConfigureBody();
             ApplyIndicatorState(force: true);

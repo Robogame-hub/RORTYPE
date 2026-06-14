@@ -80,7 +80,7 @@ MonoBehaviour:
   - {fileID: 470023}
   indicatorLights:
   - {fileID: 470025}
-  travelLocalOffset: {x: 0, y: 5, z: 0}
+  liftHeightMeters: 5
   moveSpeed: 3
   returnSpeed: 4
   returnDelayAfterExit: 3
