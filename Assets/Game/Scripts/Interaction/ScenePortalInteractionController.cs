@@ -53,6 +53,34 @@ namespace RorType.Gameplay.Interaction
                 return;
             }
 
+            var activeTotemPedestal = ResolveClosestTotemPedestal();
+            if (activeTotemPedestal != null)
+            {
+                PortalUiRuntime.ShowPrompt(activeTotemPedestal.GetInteractionPrompt(this));
+                if (!inputAdapter.InteractPressed)
+                {
+                    return;
+                }
+
+                inputAdapter.ConsumeInteractPressed();
+                activeTotemPedestal.Interact(this);
+                return;
+            }
+
+            var activeTotem = ResolveClosestTotem();
+            if (activeTotem != null)
+            {
+                PortalUiRuntime.ShowPrompt(activeTotem.GetInteractionPrompt());
+                if (!inputAdapter.InteractPressed)
+                {
+                    return;
+                }
+
+                inputAdapter.ConsumeInteractPressed();
+                activeTotem.Interact(this);
+                return;
+            }
+
             var activeInteractable = ResolveClosestInteractable();
             if (activeInteractable == null)
             {
@@ -152,6 +180,70 @@ namespace RorType.Gameplay.Interaction
             }
 
             return closestShop;
+        }
+
+        private TotemPedestal ResolveClosestTotemPedestal()
+        {
+            var pedestals = TotemPedestal.ActivePedestals;
+            TotemPedestal closestPedestal = null;
+            var closestDistance = float.MaxValue;
+
+            for (var index = 0; index < pedestals.Count; index++)
+            {
+                var pedestal = pedestals[index];
+                if (pedestal == null || !pedestal.IsAvailable)
+                {
+                    continue;
+                }
+
+                if (!pedestal.IsTouchedBy(this))
+                {
+                    continue;
+                }
+
+                var sqrDistance = pedestal.GetSqrDistanceTo(transform.position);
+                if (sqrDistance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = sqrDistance;
+                closestPedestal = pedestal;
+            }
+
+            return closestPedestal;
+        }
+
+        private TotemPickup ResolveClosestTotem()
+        {
+            var totems = TotemPickup.ActiveTotems;
+            TotemPickup closestTotem = null;
+            var closestDistance = float.MaxValue;
+
+            for (var index = 0; index < totems.Count; index++)
+            {
+                var totem = totems[index];
+                if (totem == null || !totem.IsAvailable)
+                {
+                    continue;
+                }
+
+                if (!totem.IsTouchedBy(this))
+                {
+                    continue;
+                }
+
+                var sqrDistance = totem.GetSqrDistanceTo(transform.position);
+                if (sqrDistance >= closestDistance)
+                {
+                    continue;
+                }
+
+                closestDistance = sqrDistance;
+                closestTotem = totem;
+            }
+
+            return closestTotem;
         }
 
         private WorldInteractable ResolveClosestInteractable()

@@ -127,6 +127,8 @@ namespace RorType.Gameplay.AI
         private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
         private readonly Collider[] explosionHitBuffer = new Collider[ExplosionHitBufferSize];
         private readonly Component[] explosionUniqueHitBuffer = new Component[ExplosionHitBufferSize];
+        private readonly Collider[] meleeHitBuffer = new Collider[16];
+        private readonly Component[] meleeUniqueHitBuffer = new Component[16];
         private Vector3 lastRequestedDestination;
         private float lastRequestedStoppingDistance = -1f;
         private float currentHealth;
@@ -412,6 +414,7 @@ namespace RorType.Gameplay.AI
                 TriggerMeleePunch(nextMeleeFistIndex);
                 nextMeleeFistIndex = (nextMeleeFistIndex + 1) % MeleeFistCount;
                 TryApplyPlayerDamage(directionToTarget, meleeDamage, meleeAttackRange + 0.55f);
+                TryApplyMeleeNeutralDamage(directionToTarget, meleeDamage, meleeAttackRange + 0.55f);
                 TryApplyPlayerKnockback(directionToTarget, meleeKnockbackForce, meleeAttackRange + 0.55f);
             }
         }
@@ -920,74 +923,21 @@ namespace RorType.Gameplay.AI
 
         private void SpawnResourceDrops()
         {
-            var minDrops = Mathf.Max(0, minResourceDrops);
-            var maxDrops = Mathf.Max(minDrops, maxResourceDrops);
-            if (maxDrops <= 0)
-            {
-                return;
-            }
-
-            var dropCount = Random.Range(minDrops, maxDrops + 1);
             var origin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position + Vector3.up;
-            for (var i = 0; i < dropCount; i++)
-            {
-                var canDropAmmo = archetype == EnemyCapsuleArchetype.Shooter;
-                var dropHealth = Random.value < healthDropChance;
-                var dropAmmo = !dropHealth && canDropAmmo && Random.value < shooterAmmoDropChance;
-                var pickupKind = ResolveDropKind(dropHealth, dropAmmo);
-                var amount = ResolveDropAmount(pickupKind);
-                var planarDirection = Random.insideUnitCircle.normalized;
-                if (planarDirection.sqrMagnitude <= 0.0001f)
-                {
-                    planarDirection = Vector2.right;
-                }
-
-                var launchVelocity = new Vector3(planarDirection.x, 1.6f, planarDirection.y) * dropLaunchSpeed;
-                ResourcePickupCollectible.Spawn(
-                    pickupKind,
-                    ResolveDropPrefab(pickupKind),
-                    amount,
-                    origin + new Vector3(0f, 0.35f, 0f),
-                    launchVelocity);
-            }
-        }
-
-        private ResourcePickupCollectible ResolveDropPrefab(ResourcePickupCollectible.PickupKind pickupKind)
-        {
-            switch (pickupKind)
-            {
-                case ResourcePickupCollectible.PickupKind.Health:
-                    return healthPickupPrefab;
-                case ResourcePickupCollectible.PickupKind.Ammo:
-                    return ammoPickupPrefab;
-                default:
-                    return moneyPickupPrefab;
-            }
-        }
-
-        private ResourcePickupCollectible.PickupKind ResolveDropKind(bool dropHealth, bool dropAmmo)
-        {
-            if (dropHealth)
-            {
-                return ResourcePickupCollectible.PickupKind.Health;
-            }
-
-            return dropAmmo
-                ? ResourcePickupCollectible.PickupKind.Ammo
-                : ResourcePickupCollectible.PickupKind.Money;
-        }
-
-        private int ResolveDropAmount(ResourcePickupCollectible.PickupKind pickupKind)
-        {
-            switch (pickupKind)
-            {
-                case ResourcePickupCollectible.PickupKind.Health:
-                    return healthPerPickup;
-                case ResourcePickupCollectible.PickupKind.Ammo:
-                    return ammoPerPickup;
-                default:
-                    return moneyPerPickup;
-            }
+            ResourcePickupCollectible.SpawnEnemyStyleDrops(
+                origin + new Vector3(0f, 0.35f, 0f),
+                archetype == EnemyCapsuleArchetype.Shooter,
+                minResourceDrops,
+                maxResourceDrops,
+                moneyPickupPrefab,
+                ammoPickupPrefab,
+                healthPickupPrefab,
+                moneyPerPickup,
+                ammoPerPickup,
+                healthPerPickup,
+                healthDropChance,
+                shooterAmmoDropChance,
+                dropLaunchSpeed);
         }
 
         private void TriggerAttackBounce()
@@ -1368,6 +1318,97 @@ namespace RorType.Gameplay.AI
                 0f,
                 gameObject,
                 CombatTeam.Enemy));
+        }
+
+        private void TryApplyMeleeNeutralDamage(Vector3 direction, float damageAmount, float maxDistance)
+        {
+            if (damageAmount <= 0f || maxDistance <= 0f)
+            {
+                return;
+            }
+
+            var hitDirection = direction;
+            hitDirection.y = 0f;
+            if (hitDirection.sqrMagnitude <= 0.0001f)
+            {
+                hitDirection = transform.forward;
+            }
+
+            hitDirection.Normalize();
+            var enemyCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position + Vector3.up;
+            var hitCount = Physics.OverlapSphereNonAlloc(
+                enemyCenter,
+                maxDistance,
+                meleeHitBuffer,
+                Physics.AllLayers,
+                QueryTriggerInteraction.Ignore);
+            var uniqueCount = 0;
+
+            for (var i = 0; i < hitCount && uniqueCount < meleeUniqueHitBuffer.Length; i++)
+            {
+                var hitCollider = meleeHitBuffer[i];
+                if (hitCollider == null)
+                {
+                    continue;
+                }
+
+                if (!CombatUtility.TryGetDamageable(hitCollider, out var damageable, out var damageableComponent))
+                {
+                    continue;
+                }
+
+                if (!damageable.IsAlive || damageable.Team != CombatTeam.Neutral || ReferenceEquals(damageableComponent, this))
+                {
+                    continue;
+                }
+
+                var toTarget = damageableComponent.transform.position - enemyCenter;
+                toTarget.y = 0f;
+                if (toTarget.sqrMagnitude > maxDistance * maxDistance)
+                {
+                    continue;
+                }
+
+                if (toTarget.sqrMagnitude > 0.0001f && Vector3.Dot(hitDirection, toTarget.normalized) < -0.2f)
+                {
+                    continue;
+                }
+
+                var alreadyHit = false;
+                for (var uniqueIndex = 0; uniqueIndex < uniqueCount; uniqueIndex++)
+                {
+                    if (meleeUniqueHitBuffer[uniqueIndex] == damageableComponent)
+                    {
+                        alreadyHit = true;
+                        break;
+                    }
+                }
+
+                if (alreadyHit)
+                {
+                    continue;
+                }
+
+                meleeUniqueHitBuffer[uniqueCount] = damageableComponent;
+                uniqueCount++;
+                damageable.ReceiveHit(new CombatHitInfo(
+                    damageAmount,
+                    hitCollider.ClosestPoint(enemyCenter),
+                    toTarget.sqrMagnitude > 0.0001f ? toTarget : hitDirection,
+                    meleeKnockbackForce,
+                    gameObject,
+                    CombatTeam.Enemy));
+            }
+
+            for (var i = 0; i < hitCount && i < meleeHitBuffer.Length; i++)
+            {
+                meleeHitBuffer[i] = null;
+            }
+
+            for (var i = 0; i < uniqueCount; i++)
+            {
+                meleeUniqueHitBuffer[i] = null;
+            }
         }
 
         private void BeginExplosionSequence(bool preserveHitFlashFrame = false)

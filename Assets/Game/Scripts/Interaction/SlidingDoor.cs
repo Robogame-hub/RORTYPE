@@ -8,12 +8,16 @@ namespace RorType.Gameplay.Interaction
         [SerializeField] private Transform movingRoot;
         [SerializeField] private Vector3 openLocalOffset = Vector3.down * 5f;
         [SerializeField, Min(0.01f)] private float moveSpeed = 6f;
+        [SerializeField, Min(0.01f)] private float closeSpeed = 12f;
+        [SerializeField] private bool lockOpenWhenFullyOpen = true;
         [SerializeField] private bool startOpen;
 
         private Vector3 closedLocalPosition;
         private bool isOpen;
+        private bool isLockedOpen;
 
-        public bool IsOpen => isOpen;
+        public bool IsOpen => isOpen || isLockedOpen;
+        public bool IsLockedOpen => isLockedOpen;
 
         private void Awake()
         {
@@ -24,6 +28,7 @@ namespace RorType.Gameplay.Interaction
 
             closedLocalPosition = movingRoot.localPosition;
             isOpen = startOpen;
+            isLockedOpen = startOpen && lockOpenWhenFullyOpen;
             movingRoot.localPosition = GetTargetPosition();
         }
 
@@ -34,15 +39,30 @@ namespace RorType.Gameplay.Interaction
                 return;
             }
 
+            var wantsOpen = IsOpen;
             var targetPosition = GetTargetPosition();
             movingRoot.localPosition = Vector3.MoveTowards(
                 movingRoot.localPosition,
                 targetPosition,
-                moveSpeed * Time.deltaTime);
+                (wantsOpen ? moveSpeed : closeSpeed) * Time.deltaTime);
+
+            if (!isLockedOpen &&
+                lockOpenWhenFullyOpen &&
+                wantsOpen &&
+                Vector3.SqrMagnitude(movingRoot.localPosition - targetPosition) <= 0.0001f)
+            {
+                isLockedOpen = true;
+                isOpen = true;
+            }
         }
 
         public void SetOpen(bool open)
         {
+            if (isLockedOpen && !open)
+            {
+                return;
+            }
+
             isOpen = open;
         }
 
@@ -58,7 +78,7 @@ namespace RorType.Gameplay.Interaction
 
         private Vector3 GetTargetPosition()
         {
-            return closedLocalPosition + (isOpen ? openLocalOffset : Vector3.zero);
+            return closedLocalPosition + (IsOpen ? openLocalOffset : Vector3.zero);
         }
 
         private void OnValidate()

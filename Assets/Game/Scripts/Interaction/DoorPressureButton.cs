@@ -26,6 +26,14 @@ namespace RorType.Gameplay.Interaction
             ApplyPressedState(force: true);
         }
 
+        private void Update()
+        {
+            if (!isPressed && AreLinkedDoorsLockedOpen())
+            {
+                SetPressed(true);
+            }
+        }
+
         private void OnTriggerEnter(Collider other)
         {
             if (!TryResolvePlayer(other, out var player))
@@ -56,7 +64,7 @@ namespace RorType.Gameplay.Interaction
             }
 
             playersOnButton.Remove(player);
-            if (!latchWhenPressed && playersOnButton.Count == 0)
+            if (!latchWhenPressed && playersOnButton.Count == 0 && !AreLinkedDoorsLockedOpen())
             {
                 SetPressed(false);
             }
@@ -87,7 +95,8 @@ namespace RorType.Gameplay.Interaction
 
         private void ApplyPressedState(bool force)
         {
-            var targetColor = isPressed ? pressedColor : idleColor;
+            var effectivePressed = isPressed || AreLinkedDoorsLockedOpen();
+            var targetColor = effectivePressed ? pressedColor : idleColor;
             ApplyIndicatorColor(targetColor, force);
             ApplyIndicatorLights(targetColor);
 
@@ -104,8 +113,34 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                door.SetOpen(isPressed);
+                door.SetOpen(effectivePressed);
             }
+        }
+
+        private bool AreLinkedDoorsLockedOpen()
+        {
+            if (linkedDoors == null || linkedDoors.Length == 0)
+            {
+                return false;
+            }
+
+            var hasDoor = false;
+            for (var index = 0; index < linkedDoors.Length; index++)
+            {
+                var door = linkedDoors[index];
+                if (door == null)
+                {
+                    continue;
+                }
+
+                hasDoor = true;
+                if (!door.IsLockedOpen)
+                {
+                    return false;
+                }
+            }
+
+            return hasDoor;
         }
 
         private void ApplyIndicatorColor(Color targetColor, bool force)

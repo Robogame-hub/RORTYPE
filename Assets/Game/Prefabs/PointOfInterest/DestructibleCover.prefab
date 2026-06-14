@@ -67,7 +67,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -172,7 +172,7 @@ MeshRenderer:
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -249,7 +249,7 @@ MeshRenderer:
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -326,7 +326,7 @@ MeshRenderer:
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -403,7 +403,7 @@ MeshRenderer:
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -480,7 +480,7 @@ MeshRenderer:
   m_ProbeAnchor: {fileID: 0}
   m_LightProbeVolumeOverride: {fileID: 0}
   m_Materials:
-  - {fileID: 2100000, guid: d289ba8f2f1e4bf49a3c5d104a73bb12, type: 2}
+  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
@@ -551,6 +551,9 @@ MonoBehaviour:
   maxHealth: 15
   coverSize: {x: 4, y: 2, z: 0.6}
   debrisLifetime: 2.5
+  hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
+  hitFlashCount: 3
+  hitFlashInterval: 0.05
 --- !u!114 &100003
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -107,14 +107,21 @@ MonoBehaviour:
   zeroImpulseDebrisScatter: 0.6
   dashImpactDamage: 1
   dashImpactImpulse: 3
-  nothingWeight: 1
-  goldWeight: 1
-  ammoWeight: 1
-  healthWeight: 1
-  minGoldPieces: 1
-  maxGoldPieces: 3
-  minAmmoPieces: 1
-  maxAmmoPieces: 2
+  hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
+  hitFlashCount: 3
+  hitFlashInterval: 0.05
+  dropsLoot: 1
+  canDropAmmo: 1
+  minResourceDrops: 1
+  maxResourceDrops: 3
+  moneyPickupPrefab: {fileID: 0}
+  ammoPickupPrefab: {fileID: 0}
+  healthPickupPrefab: {fileID: 0}
+  moneyPerPickup: 10
+  ammoPerPickup: 10
+  healthPerPickup: 150
+  healthDropChance: 0.2
+  ammoDropChance: 0.45
   dropLaunchSpeed: 4
 --- !u!1 &310010
 GameObject:

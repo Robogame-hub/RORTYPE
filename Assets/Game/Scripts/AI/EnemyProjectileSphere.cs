@@ -135,14 +135,14 @@ namespace RorType.Gameplay.AI
 
             if (other != null)
             {
-                if (CombatUtility.TryGetDamageable(other, out var playerDamageable, out _)
-                    && playerDamageable.Team == CombatTeam.Player
-                    && playerDamageable.IsAlive)
+                if (CombatUtility.TryGetDamageable(other, out var targetDamageable, out _)
+                    && targetDamageable.Team != CombatTeam.Enemy
+                    && targetDamageable.IsAlive)
                 {
                     var hitDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
                         ? body.linearVelocity.normalized
                         : transform.forward;
-                    playerDamageable.ReceiveHit(new CombatHitInfo(
+                    targetDamageable.ReceiveHit(new CombatHitInfo(
                         damage,
                         other.ClosestPoint(transform.position),
                         hitDirection,

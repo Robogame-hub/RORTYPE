@@ -535,4 +535,25 @@
 ## 2026-06-14 destructible tree copy note
 
 - `Assets/Game/Prefabs/Environment/Tree.prefab` remains the ordinary non-destructible tree prefab.
-- `Assets/Game/Prefabs/Environment/Distructable.prefab` is the destructible tree copy. It uses `DestructibleLootContainer` on the root with `maxHealth = 10`, a root kinematic Rigidbody, convex child `MeshCollider` debris pieces, and the same material as `DestructibleCover.prefab`.
+- `Assets/Game/Prefabs/Environment/DistructableTree.prefab` is the destructible tree copy. It uses `DestructibleLootContainer` on the root with `maxHealth = 10`, a root kinematic Rigidbody, convex child `MeshCollider` debris pieces, and the same material as `DestructibleCover.prefab`.
+
+## 2026-06-14 destructible object damage/loot rule
+
+- `DestructibleCrate`, `DestructibleBarrel`, `DestructibleCover`, and `DistructableTree` now use the shared yellow `Mat_yelow` visual family and flash white on valid hits through their destructible scripts.
+- Only `DestructibleCrate.prefab` and `DestructibleBarrel.prefab` have `DestructibleLootContainer.dropsLoot = true`. `DistructableTree.prefab` has `dropsLoot = false`, and `DestructibleCover` has no loot component; loot from cover/tree is a bug.
+- Destructible crate/barrel loot now uses `ResourcePickupCollectible.SpawnEnemyStyleDrops`, the same 1-3 pickup drop path used by enemy death. This keeps drop count and pickup amounts aligned with `EnemyCapsuleController` defaults.
+- Enemy projectiles and melee attacks can damage neutral `IDamageable` destructible objects. `ExplosiveBarrel` can be triggered by player/enemy/neutral hits, and its explosion immediately destroys `DestructibleCover` and `DestructibleLootContainer` targets caught in the blast.
+
+## 2026-06-14 door and totem door note
+
+- `SlidingDoor` now supports separate open/close speeds and locks itself open only after fully reaching its open offset when `lockOpenWhenFullyOpen` is enabled. The normal `DoorButtonPuzzle (1).prefab` pressure plate no longer latches immediately; leaving early closes the door faster than it opens.
+- Totem doors are implemented through `TotemPickup`, `TotemCarrier`, `TotemPedestal`, and `TotemDoorController`. `ScenePortalInteractionController` resolves totem pedestal/install and totem pickup interactions through the existing `E` prompt flow.
+- `Assets/Game/Prefabs/PointOfInterest/Totem.prefab` is the separate placeable pickup: a floating purple diamond that bobs, rotates, can be picked up with `E`, shrinks while orbiting the player, and keeps its bob/rotate animation after being installed on a totem platform.
+- `Assets/Game/Prefabs/PointOfInterest/ShardDoor.prefab` is the copied totem-door prefab. It ships with three totem platforms by default, and `TotemDoorController` discovers all child `TotemPedestal` components so copying/removing platforms changes the required number of totems.
+
+## 2026-06-14 player skills note
+
+- Player skill gameplay lives in `Assets/Game/Scripts/Player/PlayerSkillController.cs`, with runtime sticky-bomb projectile behavior in `Assets/Game/Scripts/Player/StickyBombProjectile.cs`.
+- Accepted defaults: radial burst on `Alpha1`, `20s` cooldown, `7` yellow radial projectiles using player-team damage; sticky bomb on `Alpha2`, `30s` cooldown, purple player-style projectile, `0.8s` fuse after sticking, `30` explosion damage, `2m` damage radius, `3m` visual radius.
+- `TopDownPlayer.prefab` and scene-local player objects in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` all carry `PlayerSkillController` because current scene players are manually authored/unpacked rather than prefab instances.
+- `PlayerStatusUiRuntime` now draws two square skill slots above dash charges, with small key labels and numeric cooldown countdowns on the slots.

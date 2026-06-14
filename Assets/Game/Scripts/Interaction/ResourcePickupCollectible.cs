@@ -21,6 +21,14 @@ namespace RorType.Gameplay.Interaction
         private const string AmmoCubePickupResourcePath = "ResourcePickups/AmmoCubePickup";
         private const string AmmoSpherePickupResourcePath = "ResourcePickups/AmmoSpherePickup";
         private const string HealthPickupResourcePath = "ResourcePickups/HealthPickup";
+        private const int DefaultEnemyStyleMinDrops = 1;
+        private const int DefaultEnemyStyleMaxDrops = 3;
+        private const int DefaultEnemyStyleMoneyAmount = 10;
+        private const int DefaultEnemyStyleAmmoAmount = 10;
+        private const int DefaultEnemyStyleHealthAmount = 150;
+        private const float DefaultEnemyStyleHealthDropChance = 0.2f;
+        private const float DefaultEnemyStyleAmmoDropChance = 0.45f;
+        private const float DefaultEnemyStyleDropLaunchSpeed = 3.2f;
 
         [SerializeField] private PickupKind kind;
         [SerializeField, Min(1)] private int amount = 1;
@@ -44,6 +52,50 @@ namespace RorType.Gameplay.Interaction
 
         public PickupKind Kind => kind;
         public int Amount => Mathf.Max(1, amount);
+
+        public static void SpawnEnemyStyleDrops(
+            Vector3 origin,
+            bool canDropAmmo,
+            int minDrops = DefaultEnemyStyleMinDrops,
+            int maxDrops = DefaultEnemyStyleMaxDrops,
+            ResourcePickupCollectible moneyPrefab = null,
+            ResourcePickupCollectible ammoPrefab = null,
+            ResourcePickupCollectible healthPrefab = null,
+            int moneyAmount = DefaultEnemyStyleMoneyAmount,
+            int ammoAmount = DefaultEnemyStyleAmmoAmount,
+            int healthAmount = DefaultEnemyStyleHealthAmount,
+            float healthChance = DefaultEnemyStyleHealthDropChance,
+            float ammoChance = DefaultEnemyStyleAmmoDropChance,
+            float launchSpeed = DefaultEnemyStyleDropLaunchSpeed)
+        {
+            minDrops = Mathf.Max(0, minDrops);
+            maxDrops = Mathf.Max(minDrops, maxDrops);
+            if (maxDrops <= 0)
+            {
+                return;
+            }
+
+            var dropCount = Random.Range(minDrops, maxDrops + 1);
+            for (var i = 0; i < dropCount; i++)
+            {
+                var dropHealth = Random.value < Mathf.Clamp01(healthChance);
+                var dropAmmo = !dropHealth && canDropAmmo && Random.value < Mathf.Clamp01(ammoChance);
+                var pickupKind = ResolveEnemyStyleDropKind(dropHealth, dropAmmo);
+                var amount = ResolveEnemyStyleDropAmount(pickupKind, moneyAmount, ammoAmount, healthAmount);
+                var planarDirection = Random.insideUnitCircle.normalized;
+                if (planarDirection.sqrMagnitude <= 0.0001f)
+                {
+                    planarDirection = Vector2.right;
+                }
+
+                Spawn(
+                    pickupKind,
+                    ResolveEnemyStyleDropPrefab(pickupKind, moneyPrefab, ammoPrefab, healthPrefab),
+                    amount,
+                    origin,
+                    new Vector3(planarDirection.x, 1.6f, planarDirection.y) * Mathf.Max(0f, launchSpeed));
+            }
+        }
 
         public static ResourcePickupCollectible Spawn(
             PickupKind pickupKind,
@@ -107,6 +159,50 @@ namespace RorType.Gameplay.Interaction
                     return Random.value < 0.5f ? ResolveAmmoCubePickupPrefab() : ResolveAmmoSpherePickupPrefab();
                 default:
                     return null;
+            }
+        }
+
+        private static ResourcePickupCollectible ResolveEnemyStyleDropPrefab(
+            PickupKind pickupKind,
+            ResourcePickupCollectible moneyPrefab,
+            ResourcePickupCollectible ammoPrefab,
+            ResourcePickupCollectible healthPrefab)
+        {
+            switch (pickupKind)
+            {
+                case PickupKind.Health:
+                    return healthPrefab;
+                case PickupKind.Ammo:
+                    return ammoPrefab;
+                default:
+                    return moneyPrefab;
+            }
+        }
+
+        private static PickupKind ResolveEnemyStyleDropKind(bool dropHealth, bool dropAmmo)
+        {
+            if (dropHealth)
+            {
+                return PickupKind.Health;
+            }
+
+            return dropAmmo ? PickupKind.Ammo : PickupKind.Money;
+        }
+
+        private static int ResolveEnemyStyleDropAmount(
+            PickupKind pickupKind,
+            int moneyAmount,
+            int ammoAmount,
+            int healthAmount)
+        {
+            switch (pickupKind)
+            {
+                case PickupKind.Health:
+                    return Mathf.Max(1, healthAmount);
+                case PickupKind.Ammo:
+                    return Mathf.Max(1, ammoAmount);
+                default:
+                    return Mathf.Max(1, moneyAmount);
             }
         }
 

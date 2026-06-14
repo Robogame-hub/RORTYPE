@@ -34,7 +34,7 @@ namespace RorType.Gameplay.Environment
 
         public bool ReceiveHit(in CombatHitInfo hitInfo)
         {
-            if (exploding || hitInfo.Team != CombatTeam.Player)
+            if (exploding || hitInfo.Damage <= 0f || hitInfo.Instigator == gameObject)
             {
                 return false;
             }
@@ -136,6 +136,12 @@ namespace RorType.Gameplay.Environment
                 if (damageable is DestructibleCover destructibleCover)
                 {
                     destructibleCover.DestroyImmediately(explosionHit);
+                    continue;
+                }
+
+                if (damageable is DestructibleLootContainer destructibleLootContainer)
+                {
+                    destructibleLootContainer.DestroyImmediately(explosionHit);
                     continue;
                 }
 

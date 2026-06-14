@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using RorType.Gameplay.Combat;
 using RorType.Gameplay.Interaction;
 using RorType.Gameplay.Player;
@@ -8,14 +10,6 @@ namespace RorType.Gameplay.Environment
     [DisallowMultipleComponent]
     public sealed class DestructibleLootContainer : MonoBehaviour, IDamageable
     {
-        private enum LootDropKind
-        {
-            None = 0,
-            Gold = 1,
-            Ammo = 2,
-            Health = 3
-        }
-
         [Header("Durability")]
         [SerializeField, Min(1f)] private float maxHealth = 1f;
         [SerializeField, Min(0.1f)] private float debrisLifetime = 2.5f;
@@ -26,21 +20,31 @@ namespace RorType.Gameplay.Environment
         [SerializeField, Min(0f)] private float dashImpactDamage = 1f;
         [SerializeField, Min(0f)] private float dashImpactImpulse = 3f;
 
-        [Header("Loot Weights")]
-        [SerializeField, Min(0f)] private float nothingWeight = 1f;
-        [SerializeField, Min(0f)] private float goldWeight = 1f;
-        [SerializeField, Min(0f)] private float ammoWeight = 1f;
-        [SerializeField, Min(0f)] private float healthWeight = 1f;
+        [Header("Feedback")]
+        [SerializeField] private Color hitFlashColor = Color.white;
+        [SerializeField, Min(1)] private int hitFlashCount = 3;
+        [SerializeField, Min(0.01f)] private float hitFlashInterval = 0.05f;
 
-        [Header("Loot Counts")]
-        [SerializeField, Min(1)] private int minGoldPieces = 1;
-        [SerializeField, Min(1)] private int maxGoldPieces = 3;
-        [SerializeField, Min(1)] private int minAmmoPieces = 1;
-        [SerializeField, Min(1)] private int maxAmmoPieces = 2;
+        [Header("Loot Drops")]
+        [SerializeField] private bool dropsLoot;
+        [SerializeField] private bool canDropAmmo = true;
+        [SerializeField, Min(0)] private int minResourceDrops = 1;
+        [SerializeField, Min(0)] private int maxResourceDrops = 3;
+        [SerializeField] private ResourcePickupCollectible moneyPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible ammoPickupPrefab;
+        [SerializeField] private ResourcePickupCollectible healthPickupPrefab;
+        [SerializeField, Min(1)] private int moneyPerPickup = 10;
+        [SerializeField, Min(1)] private int ammoPerPickup = 10;
+        [SerializeField, Min(1)] private int healthPerPickup = 150;
+        [SerializeField, Range(0f, 1f)] private float healthDropChance = 0.2f;
+        [SerializeField, Range(0f, 1f)] private float ammoDropChance = 0.45f;
         [SerializeField, Min(0f)] private float dropLaunchSpeed = 4f;
 
         private float health;
         private bool destroyed;
+        private readonly List<Renderer> visualRenderers = new();
+        private Color[] visualBaseColors;
+        private Coroutine hitFlashRoutine;
 
         public CombatTeam Team => CombatTeam.Neutral;
         public bool IsAlive => !destroyed && health > 0f;
@@ -48,6 +52,7 @@ namespace RorType.Gameplay.Environment
         private void Awake()
         {
             health = maxHealth;
+            CacheVisualRenderers();
             if (transform.childCount > 0)
             {
                 return;
@@ -65,11 +70,24 @@ namespace RorType.Gameplay.Environment
 
             health = Mathf.Max(0f, health - hitInfo.Damage);
             FloatingWorldText.Spawn(hitInfo.Point + Vector3.up * 0.35f, hitInfo.Damage.ToString("0"), Color.white, 0.1f);
+            PlayHitFlash();
             if (health <= 0f)
             {
                 BreakApart(hitInfo.Direction, hitInfo.Impulse);
             }
 
+            return true;
+        }
+
+        public bool DestroyImmediately(in CombatHitInfo hitInfo)
+        {
+            if (!IsAlive)
+            {
+                return false;
+            }
+
+            health = 0f;
+            BreakApart(hitInfo.Direction, hitInfo.Impulse);
             return true;
         }
 
@@ -128,7 +146,9 @@ namespace RorType.Gameplay.Environment
 
             destroyed = true;
             var pushDirection = hitDirection.sqrMagnitude > 0.0001f ? hitDirection.normalized : transform.forward;
-            SpawnLoot(pushDirection);
+            StopHitFlash();
+            RestoreVisualColors();
+            SpawnLoot();
 
             for (var i = 0; i < transform.childCount; i++)
             {
@@ -171,65 +191,122 @@ namespace RorType.Gameplay.Environment
             Destroy(gameObject);
         }
 
-        private void SpawnLoot(Vector3 pushDirection)
+        private void SpawnLoot()
         {
-            var dropKind = RollLootKind();
-            switch (dropKind)
+            if (!dropsLoot)
             {
-                case LootDropKind.Gold:
-                    SpawnPickupPieces(ResourcePickupCollectible.PickupKind.Money, Random.Range(minGoldPieces, maxGoldPieces + 1), pushDirection);
-                    break;
-                case LootDropKind.Ammo:
-                    SpawnPickupPieces(ResourcePickupCollectible.PickupKind.Ammo, Random.Range(minAmmoPieces, maxAmmoPieces + 1), pushDirection);
-                    break;
-                case LootDropKind.Health:
-                    SpawnPickupPieces(ResourcePickupCollectible.PickupKind.Health, 1, pushDirection);
-                    break;
+                return;
+            }
+
+            var horizontalOffset = Random.insideUnitCircle * 0.35f;
+            var origin = transform.position + new Vector3(horizontalOffset.x, 0.55f, horizontalOffset.y);
+            ResourcePickupCollectible.SpawnEnemyStyleDrops(
+                origin,
+                canDropAmmo,
+                minResourceDrops,
+                maxResourceDrops,
+                moneyPickupPrefab,
+                ammoPickupPrefab,
+                healthPickupPrefab,
+                moneyPerPickup,
+                ammoPerPickup,
+                healthPerPickup,
+                healthDropChance,
+                ammoDropChance,
+                dropLaunchSpeed);
+        }
+
+        private void CacheVisualRenderers()
+        {
+            visualRenderers.Clear();
+            GetComponentsInChildren(true, visualRenderers);
+            visualBaseColors = new Color[visualRenderers.Count];
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                visualBaseColors[i] = ResolveRendererBaseColor(visualRenderers[i]);
             }
         }
 
-        private LootDropKind RollLootKind()
+        private static Color ResolveRendererBaseColor(Renderer renderer)
         {
-            var none = Mathf.Max(0f, nothingWeight);
-            var gold = Mathf.Max(0f, goldWeight);
-            var ammo = Mathf.Max(0f, ammoWeight);
-            var health = Mathf.Max(0f, healthWeight);
-            var totalWeight = none + gold + ammo + health;
-            if (totalWeight <= 0f)
+            if (renderer == null)
             {
-                return LootDropKind.None;
+                return Color.white;
             }
 
-            var roll = Random.value * totalWeight;
-            if (roll < none)
+            var materials = renderer.sharedMaterials;
+            for (var i = 0; i < materials.Length; i++)
             {
-                return LootDropKind.None;
+                var material = materials[i];
+                if (material == null)
+                {
+                    continue;
+                }
+
+                if (material.HasProperty("_BaseColor"))
+                {
+                    return material.GetColor("_BaseColor");
+                }
+
+                if (material.HasProperty("_Color"))
+                {
+                    return material.GetColor("_Color");
+                }
             }
 
-            roll -= none;
-            if (roll < gold)
-            {
-                return LootDropKind.Gold;
-            }
-
-            roll -= gold;
-            if (roll < ammo)
-            {
-                return LootDropKind.Ammo;
-            }
-
-            return LootDropKind.Health;
+            return Color.white;
         }
 
-        private void SpawnPickupPieces(ResourcePickupCollectible.PickupKind kind, int count, Vector3 pushDirection)
+        private void PlayHitFlash()
         {
-            count = Mathf.Max(0, count);
-            for (var i = 0; i < count; i++)
+            if (hitFlashRoutine != null)
             {
-                var horizontalOffset = Random.insideUnitCircle * 0.45f;
-                var position = transform.position + new Vector3(horizontalOffset.x, 0.55f, horizontalOffset.y);
-                var launchDirection = (pushDirection + Vector3.up * 0.85f + Random.insideUnitSphere * 0.4f).normalized;
-                ResourcePickupCollectible.Spawn(kind, 1, position, launchDirection * dropLaunchSpeed);
+                StopCoroutine(hitFlashRoutine);
+            }
+
+            hitFlashRoutine = StartCoroutine(PlayHitFlashRoutine());
+        }
+
+        private IEnumerator PlayHitFlashRoutine()
+        {
+            for (var i = 0; i < hitFlashCount; i++)
+            {
+                SetVisualColor(hitFlashColor);
+                yield return new WaitForSeconds(hitFlashInterval);
+                RestoreVisualColors();
+                yield return new WaitForSeconds(hitFlashInterval);
+            }
+
+            hitFlashRoutine = null;
+        }
+
+        private void StopHitFlash()
+        {
+            if (hitFlashRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(hitFlashRoutine);
+            hitFlashRoutine = null;
+        }
+
+        private void SetVisualColor(Color color)
+        {
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                RuntimeRendererUtility.SetColor(visualRenderers[i], color);
+            }
+        }
+
+        private void RestoreVisualColors()
+        {
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                var color = visualBaseColors != null && i < visualBaseColors.Length
+                    ? visualBaseColors[i]
+                    : Color.white;
+                RuntimeRendererUtility.SetColor(visualRenderers[i], color);
             }
         }
 
@@ -243,14 +320,15 @@ namespace RorType.Gameplay.Environment
             zeroImpulseDebrisScatter = Mathf.Max(0f, zeroImpulseDebrisScatter);
             dashImpactDamage = Mathf.Max(0f, dashImpactDamage);
             dashImpactImpulse = Mathf.Max(0f, dashImpactImpulse);
-            nothingWeight = Mathf.Max(0f, nothingWeight);
-            goldWeight = Mathf.Max(0f, goldWeight);
-            ammoWeight = Mathf.Max(0f, ammoWeight);
-            healthWeight = Mathf.Max(0f, healthWeight);
-            minGoldPieces = Mathf.Max(1, minGoldPieces);
-            maxGoldPieces = Mathf.Max(minGoldPieces, maxGoldPieces);
-            minAmmoPieces = Mathf.Max(1, minAmmoPieces);
-            maxAmmoPieces = Mathf.Max(minAmmoPieces, maxAmmoPieces);
+            hitFlashCount = Mathf.Max(1, hitFlashCount);
+            hitFlashInterval = Mathf.Max(0.01f, hitFlashInterval);
+            minResourceDrops = Mathf.Max(0, minResourceDrops);
+            maxResourceDrops = Mathf.Max(minResourceDrops, maxResourceDrops);
+            moneyPerPickup = Mathf.Max(1, moneyPerPickup);
+            ammoPerPickup = Mathf.Max(1, ammoPerPickup);
+            healthPerPickup = Mathf.Max(1, healthPerPickup);
+            healthDropChance = Mathf.Clamp01(healthDropChance);
+            ammoDropChance = Mathf.Clamp01(ammoDropChance);
             dropLaunchSpeed = Mathf.Max(0f, dropLaunchSpeed);
         }
     }

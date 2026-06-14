@@ -635,13 +635,14 @@ This section supersedes the older ammo-only chest/capsule description above.
 - Enemy drops and chest/capsule drops resolve these prefabs automatically from `Resources`; explicit serialized prefab fields on enemies/containers can override the standard prefabs.
 - Older missing-prefab setups keep a runtime primitive fallback, but the accepted workflow is to tune item values on the pickup prefabs.
 
-## Current destructible loot prop implementation on 2026-06-13
+## Current destructible loot prop implementation on 2026-06-14
 
-- `Assets/Game/Scripts/Environment/DestructibleLootContainer.cs` defines non-explosive destructible loot props. It implements `IDamageable`, so player projectiles and melee hits can destroy the prop through the same combat path used by `DestructibleCover` and `ExplosiveBarrel`.
+- `Assets/Game/Scripts/Environment/DestructibleLootContainer.cs` defines non-explosive destructible props. It implements `IDamageable`, so player hits, enemy projectiles, enemy melee hits, enemy exploder blasts, and `ExplosiveBarrel` blasts can destroy these props through the shared combat path.
 - Player dash impact is now supported by `TopDownPlayerMotor`: while dashing, the movement blocker found by the grounded capsule cast receives one `CombatTeam.Player` hit per dash. This avoids depending only on `OnCollisionEnter`, which may not fire when collision-aware movement stops before penetration.
-- `Assets/Game/Prefabs/Environment/DestructibleBarrel.prefab` and `Assets/Game/Prefabs/Environment/DestructibleCrate.prefab` are authored prefabs with child mesh/collider pieces, a root kinematic Rigidbody, and the existing yellow material. On destruction, child pieces detach and are cleaned up after a short debris lifetime. Props with a positive debris impulse turn detached pieces into dynamic colliding rigidbodies; zero-impulse props still detach into falling Rigidbody parts, but their colliders are trigger-only and they receive only small horizontal scatter to avoid upward physics launches from overlapping authored pieces.
+- `Assets/Game/Prefabs/Environment/DestructibleBarrel.prefab` and `Assets/Game/Prefabs/Environment/DestructibleCrate.prefab` are authored prefabs with child mesh/collider pieces, a root kinematic Rigidbody, and the shared yellow material. On destruction, child pieces detach and are cleaned up after a short debris lifetime. Props with a positive debris impulse turn detached pieces into dynamic colliding rigidbodies; zero-impulse props still detach into falling Rigidbody parts, but their colliders are trigger-only and they receive only small horizontal scatter to avoid upward physics launches from overlapping authored pieces.
 - `DestructibleCrate.prefab` is a compact `3 x 3 x 3` matrix of 27 small cube blocks with total bounds `2 x 2 x 2`. `DestructibleBarrel.prefab` has debris impulse disabled so it does not launch upward when destroyed.
-- The default destructible loot roll has four equal outcomes: no drop, `1-3` gold pickup pieces, `1-2` ammo pickup pieces, or `1` health pickup. Pickup item values come from the standard prefab-backed `ResourcePickupCollectible` assets in `Assets/Game/Resources/ResourcePickups/`.
+- Only `DestructibleCrate.prefab` and `DestructibleBarrel.prefab` may drop loot. Their `dropsLoot` flag is enabled and they call `ResourcePickupCollectible.SpawnEnemyStyleDrops`, the same 1-3 pickup path used by enemy death. `DistructableTree.prefab` has `dropsLoot = false`, and `DestructibleCover` has no loot component.
+- `DestructibleCover` and `DistructableTree` use the same yellow material family as crate/barrel and flash white on hits like enemies. Loot from cover, tree, or other non-crate/non-barrel interactive objects should be treated as a bug.
 
 ## Current shop UI implementation on 2026-06-13
 
@@ -653,3 +654,20 @@ This section supersedes the older ammo-only chest/capsule description above.
 - Shop cards are designed as a grid of item buttons with text icons, `G` gold prices, and hover hints. Purchases are executed by the card/button click handler only, so one mouse click produces one purchase. While a shop panel is open, player combat mouse input is ignored so clicking a shop item cannot fire the player's weapon.
 - The runtime ammo HUD label uses a black outline for readability over bright level backgrounds, matching the money counter's outline treatment.
 - Temporary shop test pricing: Store shield unlock, HAMMER extra dash, HAMMER damage x2, and HAMMER shield unlock cost `100G` instead of their older `1000G` price.
+
+## Current door and totem door implementation on 2026-06-14
+
+- `Assets/Game/Scripts/Interaction/SlidingDoor.cs` drives authored door geometry from a closed local position toward `openLocalOffset`. It now has separate open and close speeds, so pressure doors can open gradually and close faster when the player leaves early.
+- With `lockOpenWhenFullyOpen` enabled, a door becomes permanently open only after the moving root fully reaches the open target. Later close requests are ignored by that locked door.
+- `Assets/Game/Scripts/Interaction/DoorPressureButton.cs` remains the ordinary pressure-platform component. `Assets/Game/Prefabs/PointOfInterest/DoorButtonPuzzle (1).prefab` is configured as non-latched pressure behavior: the linked door opens while the player stands on the platform, closes faster after early exit, and stays open after fully opening.
+- Totem-door gameplay is implemented by `TotemPickup`, `TotemCarrier`, `TotemPedestal`, and `TotemDoorController`. The same `ScenePortalInteractionController`/`PortalUiRuntime` prompt flow handles `E` pickup and installation prompts.
+- `Assets/Game/Prefabs/PointOfInterest/Totem.prefab` is a separate pickup prefab rendered as a floating purple diamond. Pressing `E` near it adds it to the player's runtime `TotemCarrier`; multiple carried totems orbit the player at reduced visual scale, and installed totems keep bobbing/rotating on their platforms.
+- `Assets/Game/Prefabs/PointOfInterest/ShardDoor.prefab` is the totem-door prefab. It contains three totem platforms by default; the controller discovers child `TotemPedestal` components at runtime, so copying or deleting platforms changes how many placed totems are required.
+
+## Current player skills implementation on 2026-06-14
+
+- `Assets/Game/Scripts/Player/PlayerSkillController.cs` is the player skill source of truth. It is attached to `TopDownPlayer.prefab` and to the manually authored scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+- Skill 1 is radial burst: `Alpha1`, `20s` cooldown, `7` yellow radial projectiles that use player-team damage and the player's damage multiplier.
+- Skill 2 is sticky bomb: `Alpha2`, `30s` cooldown, a purple player-style projectile that sticks to enemies or non-trigger surfaces, waits `0.8s`, then explodes with exploder-style values: `30` damage, `2m` damage radius, `3m` visual radius, and `4.8` impulse.
+- `Assets/Game/Scripts/Player/StickyBombProjectile.cs` handles the sticky projectile lifetime, stick-to-target parenting, explosion damage, and transient purple explosion visual.
+- `PlayerStatusUiRuntime` shows two square skill slots above the dash charge row. Each slot shows its key label and, while cooling down, a numeric countdown on the square.

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using RorType.Gameplay.Combat;
 using UnityEngine;
 
@@ -9,9 +11,15 @@ namespace RorType.Gameplay.Environment
         [SerializeField, Min(1f)] private float maxHealth = 15f;
         [SerializeField] private Vector3 coverSize = new Vector3(4f, 2f, 0.6f);
         [SerializeField, Min(0.1f)] private float debrisLifetime = 2.5f;
+        [SerializeField] private Color hitFlashColor = Color.white;
+        [SerializeField, Min(1)] private int hitFlashCount = 3;
+        [SerializeField, Min(0.01f)] private float hitFlashInterval = 0.05f;
 
         private float health;
         private bool destroyed;
+        private readonly List<Renderer> visualRenderers = new();
+        private Color[] visualBaseColors;
+        private Coroutine hitFlashRoutine;
 
         public CombatTeam Team => CombatTeam.Neutral;
         public bool IsAlive => !destroyed && health > 0f;
@@ -19,6 +27,7 @@ namespace RorType.Gameplay.Environment
         private void Awake()
         {
             health = maxHealth;
+            CacheVisualRenderers();
             if (transform.childCount > 0)
             {
                 return;
@@ -36,6 +45,7 @@ namespace RorType.Gameplay.Environment
 
             health = Mathf.Max(0f, health - hitInfo.Damage);
             FloatingWorldText.Spawn(hitInfo.Point + Vector3.up * 0.35f, hitInfo.Damage.ToString("0"), Color.white, 0.1f);
+            PlayHitFlash();
             if (health <= 0f)
             {
                 BreakApart(hitInfo.Direction, hitInfo.Impulse);
@@ -65,6 +75,8 @@ namespace RorType.Gameplay.Environment
 
             destroyed = true;
             var pushDirection = hitDirection.sqrMagnitude > 0.0001f ? hitDirection.normalized : transform.forward;
+            StopHitFlash();
+            RestoreVisualColors();
             for (var i = 0; i < transform.childCount; i++)
             {
                 var child = transform.GetChild(i);
@@ -85,6 +97,100 @@ namespace RorType.Gameplay.Environment
             Destroy(gameObject);
         }
 
+        private void CacheVisualRenderers()
+        {
+            visualRenderers.Clear();
+            GetComponentsInChildren(true, visualRenderers);
+            visualBaseColors = new Color[visualRenderers.Count];
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                visualBaseColors[i] = ResolveRendererBaseColor(visualRenderers[i]);
+            }
+        }
+
+        private static Color ResolveRendererBaseColor(Renderer renderer)
+        {
+            if (renderer == null)
+            {
+                return Color.white;
+            }
+
+            var materials = renderer.sharedMaterials;
+            for (var i = 0; i < materials.Length; i++)
+            {
+                var material = materials[i];
+                if (material == null)
+                {
+                    continue;
+                }
+
+                if (material.HasProperty("_BaseColor"))
+                {
+                    return material.GetColor("_BaseColor");
+                }
+
+                if (material.HasProperty("_Color"))
+                {
+                    return material.GetColor("_Color");
+                }
+            }
+
+            return Color.white;
+        }
+
+        private void PlayHitFlash()
+        {
+            if (hitFlashRoutine != null)
+            {
+                StopCoroutine(hitFlashRoutine);
+            }
+
+            hitFlashRoutine = StartCoroutine(PlayHitFlashRoutine());
+        }
+
+        private IEnumerator PlayHitFlashRoutine()
+        {
+            for (var i = 0; i < hitFlashCount; i++)
+            {
+                SetVisualColor(hitFlashColor);
+                yield return new WaitForSeconds(hitFlashInterval);
+                RestoreVisualColors();
+                yield return new WaitForSeconds(hitFlashInterval);
+            }
+
+            hitFlashRoutine = null;
+        }
+
+        private void StopHitFlash()
+        {
+            if (hitFlashRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(hitFlashRoutine);
+            hitFlashRoutine = null;
+        }
+
+        private void SetVisualColor(Color color)
+        {
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                RuntimeRendererUtility.SetColor(visualRenderers[i], color);
+            }
+        }
+
+        private void RestoreVisualColors()
+        {
+            for (var i = 0; i < visualRenderers.Count; i++)
+            {
+                var color = visualBaseColors != null && i < visualBaseColors.Length
+                    ? visualBaseColors[i]
+                    : Color.white;
+                RuntimeRendererUtility.SetColor(visualRenderers[i], color);
+            }
+        }
+
         private void OnValidate()
         {
             maxHealth = Mathf.Max(1f, maxHealth);
@@ -92,6 +198,8 @@ namespace RorType.Gameplay.Environment
             coverSize.y = Mathf.Max(0.1f, coverSize.y);
             coverSize.z = Mathf.Max(0.1f, coverSize.z);
             debrisLifetime = Mathf.Max(0.1f, debrisLifetime);
+            hitFlashCount = Mathf.Max(1, hitFlashCount);
+            hitFlashInterval = Mathf.Max(0.01f, hitFlashInterval);
         }
     }
 }

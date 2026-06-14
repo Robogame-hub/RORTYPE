@@ -127,7 +127,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.SlidingDoor
   movingRoot: {fileID: 1236001110718032117}
   openLocalOffset: {x: 0, y: -5.5, z: 0}
-  moveSpeed: 6
+  moveSpeed: 2.5
+  closeSpeed: 8
+  lockOpenWhenFullyOpen: 1
   startOpen: 0
 --- !u!1 &707220559122805668
 GameObject:
@@ -326,7 +328,7 @@ MonoBehaviour:
   - {fileID: 6024255620230768845}
   indicatorLights:
   - {fileID: 6727064512088302677}
-  latchWhenPressed: 1
+  latchWhenPressed: 0
   idleColor: {r: 1, g: 0.08, b: 0.05, a: 1}
   pressedColor: {r: 0.08, g: 1, b: 0.25, a: 1}
   emissionIntensity: 1.5

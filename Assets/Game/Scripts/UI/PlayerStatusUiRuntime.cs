@@ -10,9 +10,14 @@ namespace RorType.Gameplay.UI
 
         private PlayerResourceController resources;
         private TopDownPlayerMotor motor;
+        private PlayerSkillController skills;
         private Canvas canvas;
         private Text ammoLabel;
         private Text moneyLabel;
+        private Image[] skillSlots;
+        private Text[] skillCooldownLabels;
+        private Text[] skillKeyLabels;
+        private Transform skillRowTransform;
         private Image[] dashCharges;
         private Transform dashRowTransform;
         private Image staminaFill;
@@ -34,6 +39,9 @@ namespace RorType.Gameplay.UI
             runtime.resources = playerResources;
             runtime.motor = playerResources != null
                 ? playerResources.GetComponent<TopDownPlayerMotor>()
+                : null;
+            runtime.skills = playerResources != null
+                ? playerResources.GetComponent<PlayerSkillController>()
                 : null;
         }
 
@@ -70,6 +78,11 @@ namespace RorType.Gameplay.UI
             {
                 resources = PlayerResourceController.ActivePlayer;
                 motor = resources != null ? resources.GetComponent<TopDownPlayerMotor>() : null;
+                skills = resources != null ? resources.GetComponent<PlayerSkillController>() : null;
+            }
+            else if (skills == null)
+            {
+                skills = resources.GetComponent<PlayerSkillController>();
             }
 
             if (canvas != null)
@@ -85,6 +98,7 @@ namespace RorType.Gameplay.UI
             UpdateTextFeedback();
             ammoLabel.text = $"\u041f\u0430\u0442\u0440\u043e\u043d\u044b {resources.Ammo}";
             moneyLabel.text = $"{resources.Money}G";
+            UpdateSkillUi();
             UpdateDashUi();
             UpdateStaminaUi();
             UpdateHealthUi();
@@ -118,7 +132,7 @@ namespace RorType.Gameplay.UI
             rootRect.anchorMin = new Vector2(1f, 0f);
             rootRect.anchorMax = new Vector2(1f, 0f);
             rootRect.pivot = new Vector2(1f, 0f);
-            rootRect.sizeDelta = new Vector2(220f, 96f);
+            rootRect.sizeDelta = new Vector2(220f, 152f);
             rootRect.anchoredPosition = new Vector2(-28f, 28f);
 
             var rootLayout = root.GetComponent<VerticalLayoutGroup>();
@@ -133,6 +147,20 @@ namespace RorType.Gameplay.UI
             var ammoOutline = ammoLabel.gameObject.AddComponent<Outline>();
             ammoOutline.effectColor = new Color(0f, 0f, 0f, 1f);
             ammoOutline.effectDistance = new Vector2(2f, -2f);
+
+            var skillRow = new GameObject("Skill Slots", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            skillRow.transform.SetParent(root.transform, false);
+            skillRowTransform = skillRow.transform;
+            skillRow.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, 44f);
+            var skillLayout = skillRow.GetComponent<HorizontalLayoutGroup>();
+            skillLayout.spacing = 8f;
+            skillLayout.childAlignment = TextAnchor.MiddleRight;
+            skillLayout.childControlHeight = false;
+            skillLayout.childControlWidth = false;
+            skillLayout.childForceExpandHeight = false;
+            skillLayout.childForceExpandWidth = false;
+
+            EnsureSkillSlotCount(PlayerSkillController.SkillSlotCount, uiFont);
 
             var dashRow = new GameObject("Dash Charges", typeof(RectTransform), typeof(HorizontalLayoutGroup));
             dashRow.transform.SetParent(root.transform, false);
@@ -217,6 +245,39 @@ namespace RorType.Gameplay.UI
                 dashCharges[i].color = isReady
                     ? new Color(0.18f, 0.75f, 1f, 0.95f)
                     : new Color(0.08f, 0.12f, 0.16f, 0.85f);
+            }
+        }
+
+        private void UpdateSkillUi()
+        {
+            if (skillSlots == null || skillCooldownLabels == null || skillKeyLabels == null)
+            {
+                return;
+            }
+
+            for (var i = 0; i < skillSlots.Length; i++)
+            {
+                var hasSkills = skills != null && skills.isActiveAndEnabled;
+                var remaining = hasSkills ? skills.GetSkillCooldownRemaining(i) : 0f;
+                var duration = hasSkills ? skills.GetSkillCooldownDuration(i) : 0f;
+                var isReady = hasSkills && remaining <= 0.001f;
+                var cooldownProgress = duration > 0f ? Mathf.Clamp01(remaining / duration) : 0f;
+
+                skillSlots[i].color = isReady
+                    ? new Color(0.32f, 0.24f, 0.42f, 0.95f)
+                    : Color.Lerp(new Color(0.1f, 0.08f, 0.13f, 0.92f), new Color(0.48f, 0.16f, 0.72f, 0.92f), 1f - cooldownProgress);
+
+                if (skillCooldownLabels[i] != null)
+                {
+                    skillCooldownLabels[i].text = hasSkills && remaining > 0.001f
+                        ? Mathf.CeilToInt(remaining).ToString()
+                        : string.Empty;
+                }
+
+                if (skillKeyLabels[i] != null)
+                {
+                    skillKeyLabels[i].text = hasSkills ? FormatKeyLabel(skills.GetSkillKey(i)) : string.Empty;
+                }
             }
         }
 
@@ -361,6 +422,132 @@ namespace RorType.Gameplay.UI
             fillRect.offsetMin = new Vector2(2f, 2f);
             fillRect.offsetMax = new Vector2(-2f, -2f);
             return fill;
+        }
+
+        private void EnsureSkillSlotCount(int count, Font font)
+        {
+            count = Mathf.Max(1, count);
+            if (skillRowTransform == null)
+            {
+                return;
+            }
+
+            if (skillSlots != null && skillSlots.Length == count)
+            {
+                return;
+            }
+
+            if (font == null)
+            {
+                font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            }
+
+            if (skillSlots != null)
+            {
+                for (var i = 0; i < skillSlots.Length; i++)
+                {
+                    if (skillSlots[i] != null)
+                    {
+                        Destroy(skillSlots[i].gameObject);
+                    }
+                }
+            }
+
+            skillSlots = new Image[count];
+            skillCooldownLabels = new Text[count];
+            skillKeyLabels = new Text[count];
+            for (var i = 0; i < skillSlots.Length; i++)
+            {
+                CreateSkillSlot($"Skill {i + 1}", skillRowTransform, font, out skillSlots[i], out skillCooldownLabels[i], out skillKeyLabels[i]);
+            }
+        }
+
+        private static void CreateSkillSlot(string objectName, Transform parent, Font font, out Image slotImage, out Text cooldownLabel, out Text keyLabel)
+        {
+            var slotObject = new GameObject(objectName, typeof(RectTransform), typeof(Image), typeof(Outline));
+            slotObject.transform.SetParent(parent, false);
+            slotObject.GetComponent<RectTransform>().sizeDelta = new Vector2(44f, 44f);
+            slotImage = slotObject.GetComponent<Image>();
+            slotImage.color = new Color(0.32f, 0.24f, 0.42f, 0.95f);
+
+            var outline = slotObject.GetComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            outline.effectDistance = new Vector2(2f, -2f);
+
+            var cooldownObject = new GameObject("Cooldown", typeof(RectTransform), typeof(Text), typeof(Outline));
+            cooldownObject.transform.SetParent(slotObject.transform, false);
+            cooldownLabel = cooldownObject.GetComponent<Text>();
+            cooldownLabel.font = font;
+            cooldownLabel.fontSize = 24;
+            cooldownLabel.alignment = TextAnchor.MiddleCenter;
+            cooldownLabel.color = Color.white;
+            cooldownLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            cooldownLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            var cooldownOutline = cooldownObject.GetComponent<Outline>();
+            cooldownOutline.effectColor = Color.black;
+            cooldownOutline.effectDistance = new Vector2(2f, -2f);
+            var cooldownRect = cooldownLabel.rectTransform;
+            cooldownRect.anchorMin = Vector2.zero;
+            cooldownRect.anchorMax = Vector2.one;
+            cooldownRect.offsetMin = Vector2.zero;
+            cooldownRect.offsetMax = Vector2.zero;
+
+            var keyObject = new GameObject("Key", typeof(RectTransform), typeof(Text), typeof(Outline));
+            keyObject.transform.SetParent(slotObject.transform, false);
+            keyLabel = keyObject.GetComponent<Text>();
+            keyLabel.font = font;
+            keyLabel.fontSize = 14;
+            keyLabel.alignment = TextAnchor.LowerRight;
+            keyLabel.color = new Color(1f, 0.86f, 0.1f, 1f);
+            keyLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            keyLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            var keyOutline = keyObject.GetComponent<Outline>();
+            keyOutline.effectColor = Color.black;
+            keyOutline.effectDistance = new Vector2(1f, -1f);
+            var keyRect = keyLabel.rectTransform;
+            keyRect.anchorMin = Vector2.zero;
+            keyRect.anchorMax = Vector2.one;
+            keyRect.offsetMin = new Vector2(3f, 2f);
+            keyRect.offsetMax = new Vector2(-4f, -2f);
+        }
+
+        private static string FormatKeyLabel(KeyCode key)
+        {
+            switch (key)
+            {
+                case KeyCode.Alpha0:
+                case KeyCode.Keypad0:
+                    return "0";
+                case KeyCode.Alpha1:
+                case KeyCode.Keypad1:
+                    return "1";
+                case KeyCode.Alpha2:
+                case KeyCode.Keypad2:
+                    return "2";
+                case KeyCode.Alpha3:
+                case KeyCode.Keypad3:
+                    return "3";
+                case KeyCode.Alpha4:
+                case KeyCode.Keypad4:
+                    return "4";
+                case KeyCode.Alpha5:
+                case KeyCode.Keypad5:
+                    return "5";
+                case KeyCode.Alpha6:
+                case KeyCode.Keypad6:
+                    return "6";
+                case KeyCode.Alpha7:
+                case KeyCode.Keypad7:
+                    return "7";
+                case KeyCode.Alpha8:
+                case KeyCode.Keypad8:
+                    return "8";
+                case KeyCode.Alpha9:
+                case KeyCode.Keypad9:
+                    return "9";
+                default:
+                    return key == KeyCode.None ? string.Empty : key.ToString();
+            }
         }
 
         private void EnsureDashChargeCount(int count)
