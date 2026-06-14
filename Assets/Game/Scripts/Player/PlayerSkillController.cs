@@ -15,7 +15,7 @@ namespace RorType.Gameplay.Player
 
         [Header("Radial Burst")]
         [SerializeField] private KeyCode radialBurstKey = KeyCode.Alpha1;
-        [SerializeField, Min(0.1f)] private float radialBurstCooldown = 20f;
+        [SerializeField, Min(0.1f)] private float radialBurstCooldown = 5f;
         [SerializeField, Min(3)] private int radialProjectileCount = 7;
         [SerializeField, Min(0.1f)] private float radialProjectileSpeed = 18f;
         [SerializeField, Min(0.01f)] private float radialProjectileLifetime = 1.8f;
@@ -24,17 +24,17 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float radialProjectileForwardOffset = 0.95f;
         [SerializeField, Min(0f)] private float radialProjectileDamage = 1f;
         [SerializeField, Min(0f)] private float radialProjectileImpactImpulse = 1f;
-        [SerializeField] private Color radialProjectileColor = new Color(1f, 0.86f, 0.18f);
+        [SerializeField] private Color radialProjectileColor = new Color(0.86f, 0.14f, 0.14f);
 
         [Header("Sticky Bomb")]
         [SerializeField] private KeyCode stickyBombKey = KeyCode.Alpha2;
-        [SerializeField, Min(0.1f)] private float stickyBombCooldown = 30f;
+        [SerializeField, Min(0.1f)] private float stickyBombCooldown = 5f;
         [SerializeField, Min(0.1f)] private float stickyBombSpeed = 28f;
         [SerializeField, Min(0.01f)] private float stickyBombLifetime = 1.4f;
         [SerializeField, Min(0.1f)] private float stickyBombMaxDistance = 20f;
-        [SerializeField, Min(0.01f)] private float stickyBombRadius = 0.2f;
+        [SerializeField, Min(0.01f)] private float stickyBombRadius = 0.3f;
         [SerializeField, Min(0f)] private float stickyBombSpawnForwardOffset = 0.95f;
-        [SerializeField, Min(0.01f)] private float stickyBombFuse = 0.8f;
+        [SerializeField, Min(0.01f)] private float stickyBombFuse = 1.2f;
         [SerializeField, Min(0.1f)] private float stickyBombExplosionVisualRadius = 3f;
         [SerializeField, Min(0.1f)] private float stickyBombExplosionDamageRadius = 2f;
         [SerializeField, Min(0f)] private float stickyBombExplosionDamage = 30f;

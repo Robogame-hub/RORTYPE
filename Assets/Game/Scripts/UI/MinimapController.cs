@@ -95,7 +95,7 @@ namespace RorType.Gameplay.UI
                 return;
             }
 
-            slot.root.sizeDelta = Vector2.one * trackable.MarkerSize;
+            slot.root.sizeDelta = GetMarkerSizeDelta(trackable);
             slot.root.anchoredPosition = GetAnchoredPosition(trackable);
             slot.root.localRotation = trackable.RotateWithWorldYaw
                 ? Quaternion.Euler(0f, 0f, -GetYawDegrees(trackable))
@@ -110,6 +110,22 @@ namespace RorType.Gameplay.UI
             {
                 slot.root.gameObject.SetActive(isVisible);
             }
+        }
+
+        private Vector2 GetMarkerSizeDelta(MinimapTrackable trackable)
+        {
+            if (mapViewport != null &&
+                trackable.TryGetMarkerWorldSize(out var markerWorldSize) &&
+                worldSizeMeters.x > 0.001f &&
+                worldSizeMeters.y > 0.001f)
+            {
+                var rect = mapViewport.rect;
+                return new Vector2(
+                    Mathf.Max(4f, Mathf.Abs(markerWorldSize.x / worldSizeMeters.x * rect.width)),
+                    Mathf.Max(4f, Mathf.Abs(markerWorldSize.y / worldSizeMeters.y * rect.height)));
+            }
+
+            return Vector2.one * trackable.MarkerSize;
         }
 
         private Vector2 GetAnchoredPosition(MinimapTrackable trackable)

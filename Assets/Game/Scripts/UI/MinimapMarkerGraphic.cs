@@ -39,7 +39,7 @@ namespace RorType.Gameplay.UI
                     AddRotatedQuad(vh, Vector2.zero, new Vector2(halfMin * 1.7f, halfMin * 0.34f), -45f);
                     break;
                 case MinimapMarkerShape.Square:
-                    AddQuad(vh, new Vector2(-halfMin, -halfMin), new Vector2(halfMin, halfMin));
+                    AddQuad(vh, new Vector2(-halfWidth, -halfHeight), new Vector2(halfWidth, halfHeight));
                     break;
                 case MinimapMarkerShape.Triangle:
                     AddTriangle(

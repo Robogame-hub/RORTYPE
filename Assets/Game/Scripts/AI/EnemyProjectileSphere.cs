@@ -152,7 +152,7 @@ namespace RorType.Gameplay.AI
                 }
 
                 var knockbackReceiver = other.GetComponentInParent<IKnockbackReceiver>();
-                if (knockbackReceiver != null)
+                if (knockbackForce > 0f && knockbackReceiver != null)
                 {
                     var impactDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
                         ? body.linearVelocity.normalized

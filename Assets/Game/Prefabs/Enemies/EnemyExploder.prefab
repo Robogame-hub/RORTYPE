@@ -236,7 +236,7 @@ MonoBehaviour:
   shooterProjectileMaxDistance: 20
   shooterProjectileRadius: 0.18
   shooterProjectileForwardOffset: 0.95
-  shooterKnockbackForce: 2.6
+  shooterKnockbackForce: 0
   shooterProjectileDamage: 20
   shooterProjectileColor: {r: 1, g: 0.86, b: 0.18, a: 1}
   meleeAttackRange: 1.65

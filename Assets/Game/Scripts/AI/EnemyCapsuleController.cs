@@ -61,7 +61,7 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0.1f)] private float shooterProjectileMaxDistance = DefaultProjectileMaxDistance;
         [SerializeField, Min(0.01f)] private float shooterProjectileRadius = 0.18f;
         [SerializeField, Min(0f)] private float shooterProjectileForwardOffset = 0.95f;
-        [SerializeField, Min(0f)] private float shooterKnockbackForce = 2.6f;
+        [SerializeField, Min(0f)] private float shooterKnockbackForce;
         [SerializeField, Min(0f)] private float shooterProjectileDamage = 20f;
         [SerializeField] private Color shooterProjectileColor = new Color(1f, 0.86f, 0.18f);
 

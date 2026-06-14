@@ -1,3 +1,4 @@
+using RorType.Gameplay.UI;
 using UnityEngine;
 
 namespace RorType.Gameplay.Interaction
@@ -15,6 +16,7 @@ namespace RorType.Gameplay.Interaction
         private Vector3 closedLocalPosition;
         private bool isOpen;
         private bool isLockedOpen;
+        private MinimapTrackable minimapTrackable;
 
         public bool IsOpen => isOpen || isLockedOpen;
         public bool IsLockedOpen => isLockedOpen;
@@ -30,6 +32,8 @@ namespace RorType.Gameplay.Interaction
             isOpen = startOpen;
             isLockedOpen = startOpen && lockOpenWhenFullyOpen;
             movingRoot.localPosition = GetTargetPosition();
+            minimapTrackable = GetComponent<MinimapTrackable>();
+            RefreshMinimapMarker();
         }
 
         private void Update()
@@ -53,6 +57,7 @@ namespace RorType.Gameplay.Interaction
             {
                 isLockedOpen = true;
                 isOpen = true;
+                RefreshMinimapMarker();
             }
         }
 
@@ -64,6 +69,7 @@ namespace RorType.Gameplay.Interaction
             }
 
             isOpen = open;
+            RefreshMinimapMarker();
         }
 
         public void Open()
@@ -79,6 +85,14 @@ namespace RorType.Gameplay.Interaction
         private Vector3 GetTargetPosition()
         {
             return closedLocalPosition + (IsOpen ? openLocalOffset : Vector3.zero);
+        }
+
+        private void RefreshMinimapMarker()
+        {
+            if (minimapTrackable != null)
+            {
+                minimapTrackable.enabled = !isLockedOpen;
+            }
         }
 
         private void OnValidate()

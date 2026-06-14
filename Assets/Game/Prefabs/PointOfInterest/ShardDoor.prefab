@@ -66,6 +66,7 @@ GameObject:
   - component: {fileID: 920000013}
   - component: {fileID: 920000014}
   - component: {fileID: 920000015}
+  - component: {fileID: 920000016}
   m_Layer: 0
   m_Name: SlidingDoor_Totem
   m_TagString: Untagged
@@ -184,6 +185,27 @@ MonoBehaviour:
   closeSpeed: 8
   lockOpenWhenFullyOpen: 1
   startOpen: 0
+--- !u!114 &920000016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 920000010}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
+  trackedTransform: {fileID: 920000011}
+  iconGroup: 2
+  markerShape: 1
+  iconColor: {r: 0.95, g: 0.08, b: 0.08, a: 1}
+  markerSize: 4
+  scaleMarkerToWorldBounds: 1
+  markerWorldSizeMeters: {x: 0, y: 0}
+  rotateWithWorldYaw: 1
+  worldOffset: {x: 0, y: 0, z: 0}
 --- !u!1 &920000020
 GameObject:
   m_ObjectHideFlags: 0

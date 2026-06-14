@@ -554,6 +554,12 @@
 ## 2026-06-14 player skills note
 
 - Player skill gameplay lives in `Assets/Game/Scripts/Player/PlayerSkillController.cs`, with runtime sticky-bomb projectile behavior in `Assets/Game/Scripts/Player/StickyBombProjectile.cs`.
-- Accepted defaults: radial burst on `Alpha1`, `20s` cooldown, `7` yellow radial projectiles using player-team damage; sticky bomb on `Alpha2`, `30s` cooldown, purple player-style projectile, `0.8s` fuse after sticking, `30` explosion damage, `2m` damage radius, `3m` visual radius.
+- Accepted defaults: radial burst on `Alpha1`, `5s` cooldown, `7` red radial projectiles using player-team damage; sticky bomb on `Alpha2`, `5s` cooldown, larger purple player-style projectile, `1.2s` fuse after sticking, `30` explosion damage, `2m` damage radius, `3m` visual radius.
 - `TopDownPlayer.prefab` and scene-local player objects in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` all carry `PlayerSkillController` because current scene players are manually authored/unpacked rather than prefab instances.
 - `PlayerStatusUiRuntime` now draws two square skill slots above dash charges, with small key labels and numeric cooldown countdowns on the slots.
+
+## 2026-06-14 minimap, skill, and shooter projectile balance note
+
+- Destructible cover is no longer a minimap point of interest. Doors are the accepted environment obstacle marker on the minimap: door markers are red rectangles, rotate with door yaw, and can scale from the tracked door's world X/Z bounds so their minimap length matches the authored door length.
+- Current active skill defaults are 5s cooldown for both radial burst and sticky bomb. Player radial burst projectiles are red like normal player shots. Sticky bomb is larger (`0.3` radius) and detonates later after sticking (`1.2s` fuse); its flight speed/lifetime/max-distance remain aligned with the normal player shot values.
+- Shooter projectile knockback is disabled (`shooterKnockbackForce = 0`), including radial shooter volleys, so shooter enemies can still damage the player but no longer push the player away with shots.
