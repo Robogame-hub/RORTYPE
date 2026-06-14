@@ -688,6 +688,13 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 - Player hit flashing excludes runtime melee fist renderers so attack visuals keep their configured red color after the flash.
 - `PlayerRespawnController.fallDistance` is now `7m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 
+## Current player occlusion ghost implementation on 2026-06-15
+
+- `Assets/Game/Scripts/Player/PlayerOcclusionGhost.cs` checks whether a non-player collider blocks the line from `Camera.main` to the player's smoothed render probe point.
+- While blocked, the player gets a blue transparent fresnel ghost overlay that renders through obstacles. The effect uses `Assets/Game/Shaders/PlayerGhostFresnel.shader` and `Assets/Game/Resources/Materials/PlayerGhostFresnel.mat`.
+- The ghost overlay is created as duplicate runtime renderers on the player's visual meshes, not by replacing the normal player material. This keeps the normal red player visual, hit flash, and combat feedback intact.
+- `PlayerResourceController` auto-adds `PlayerOcclusionGhost` so scene-local players in existing gameplay scenes receive the behavior without manual scene edits.
+
 ## Current elevator platform implementation on 2026-06-15
 
 - `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` implements a pressure-triggered moving lift for manually authored scene placement.

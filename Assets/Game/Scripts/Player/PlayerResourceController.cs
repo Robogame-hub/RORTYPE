@@ -102,6 +102,7 @@ namespace RorType.Gameplay.Player
         {
             NormalizeSettings();
             CacheHitFlashRenderers();
+            EnsureOcclusionGhost();
 
             if (hasPersistentState)
             {
@@ -422,8 +423,17 @@ namespace RorType.Gameplay.Player
         private static bool IsTransientCombatRenderer(Renderer renderer)
         {
             var rendererName = renderer.name;
-            return string.Equals(rendererName, "LeftMeleeFist", StringComparison.Ordinal)
+            return PlayerOcclusionGhost.IsGhostOverlayRenderer(renderer)
+                || string.Equals(rendererName, "LeftMeleeFist", StringComparison.Ordinal)
                 || string.Equals(rendererName, "RightMeleeFist", StringComparison.Ordinal);
+        }
+
+        private void EnsureOcclusionGhost()
+        {
+            if (GetComponent<PlayerOcclusionGhost>() == null)
+            {
+                gameObject.AddComponent<PlayerOcclusionGhost>();
+            }
         }
 
         private static Color ResolveRendererBaseColor(Renderer renderer)

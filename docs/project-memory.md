@@ -581,3 +581,10 @@
 - Elevator gameplay lives in `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` and the placeable prefab is `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab`.
 - The elevator is a kinematic Rigidbody platform with an authored pressure-button trigger on the platform. When a player stands on the trigger, it moves up by the inspector-configured `liftHeightMeters` value (`5m` by default); after the last player leaves the platform trigger, it waits `3s` and returns down.
 - `ElevatorPlatform` carries player Rigidbody roots by the platform movement delta while they are inside the pressure trigger, so the current `TopDownPlayerMotor` does not get left behind during vertical lift movement.
+
+## 2026-06-15 player occlusion ghost note
+
+- `PlayerOcclusionGhost` gives the player a blue fresnel ghost overlay only while a non-player collider blocks the line from `Camera.main` to the player's `TopDownPlayerMotor.RenderPosition` probe point.
+- The overlay is rendered by runtime duplicate mesh renderers using `Assets/Game/Resources/Materials/PlayerGhostFresnel.mat` and `Assets/Game/Shaders/PlayerGhostFresnel.shader`, with `ZTest Always` so the silhouette remains visible through tall obstacles.
+- `PlayerResourceController` auto-adds `PlayerOcclusionGhost` at runtime, because current gameplay scenes use manually authored scene-local player objects rather than relying only on the `TopDownPlayer` prefab.
+- Player hit flashing excludes `OcclusionGhostOverlay*` renderers so damage feedback does not overwrite the ghost material.
