@@ -575,3 +575,9 @@
 
 - `PlayerResourceController.ReceiveHit` now triggers a white multi-blink hit flash on the player's own visual renderers after any accepted non-player hit, including hits fully absorbed by shield. Runtime melee fist renderers are excluded so their attack color is not reset.
 - Player fall respawn/death threshold is now `7m` through `PlayerRespawnController.fallDistance`, serialized on `TopDownPlayer.prefab` and scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+
+## 2026-06-15 elevator platform note
+
+- Elevator gameplay lives in `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` and the placeable prefab is `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab`.
+- The elevator is a kinematic Rigidbody platform with an authored pressure-button trigger on the platform. When a player stands on the trigger, it moves up by `5m`; after the last player leaves the platform trigger, it waits `3s` and returns down.
+- `ElevatorPlatform` carries player Rigidbody roots by the platform movement delta while they are inside the pressure trigger, so the current `TopDownPlayerMotor` does not get left behind during vertical lift movement.

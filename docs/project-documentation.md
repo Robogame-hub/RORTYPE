@@ -687,3 +687,10 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 - `PlayerResourceController.ReceiveHit` deducts shield/health, spawns the existing floating shield/HP damage text, and now also flashes the player's visual renderers white after any accepted non-player hit.
 - Player hit flashing excludes runtime melee fist renderers so attack visuals keep their configured red color after the flash.
 - `PlayerRespawnController.fallDistance` is now `7m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+
+## Current elevator platform implementation on 2026-06-15
+
+- `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` implements a pressure-triggered moving lift for manually authored scene placement.
+- `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab` contains a yellow solid deck, a red/green pressure button trigger on the deck, a point light indicator, and a kinematic Rigidbody root.
+- Default behavior matches the accepted prototype requirement: stepping onto the platform button raises the elevator by `5m`; leaving the platform trigger starts a `3s` return delay; after the delay the elevator moves back down.
+- While the player remains inside the pressure trigger, the elevator applies its movement delta to the player's Rigidbody root, keeping the current `TopDownPlayerMotor` riding with the moving platform.
