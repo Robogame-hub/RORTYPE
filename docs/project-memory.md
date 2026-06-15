@@ -594,3 +594,21 @@
 - `Assets/Game/Prefabs/UI/InteractionUi.prefab` is the authored scene UI for portal/interact prompts, portal destination buttons, and shop cards. It is placed as a prefab instance in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 - `PortalUiRuntime` and `ShopUiPanel` must not create Canvas, EventSystem, panels, buttons, or shop cards at runtime. Missing scene-authored interaction UI should produce a warning instead of fallback generation.
 - `FloatingWorldText` now enforces a readable minimum scale (`0.9`), applies a `3x` scale multiplier to incoming text scale values, and renders a black `TextMeshOutline` so player damage, pickup rewards, and enemy damage numbers stay readable. Enemy damage numbers must use `FloatingWorldText.Spawn` instead of their own smaller `TextMesh` setup. Enemy overhead health text uses the same black outline and a larger `0.225` scale.
+
+## 2026-06-15 documentation and roadmap cleanup note
+
+- `docs/implementation-roadmap.md` now treats early movement/combat/minimap tasks as completed or superseded and refocuses the next plan on scene alignment, `Level_1` encounter loop, rewards, hub flow, saving, and vertical slice production.
+- `docs/player-movement-roadmap.md` is now a closed historical v1 movement plan; future player movement work should be balance/polish/integration, not recreating the controller from scratch.
+- `docs/project-documentation.md` now documents the current prototype state instead of saying that enemies, shops, portals, minimap, and gameplay logic are absent.
+- Current mismatch found during documentation cleanup: `ProjectSettings/EditorBuildSettings.asset` references `Assets/Game/Scene/Hub_2.unity` and `Assets/Game/Scene/Level_3.unity`, but those `.unity` files are not currently present under `Assets/Game/Scene`.
+- Shop balance documentation now points current merchant/blacksmith purchases to `ShopInteractable`; `WorldInteractable` remains resource/container-only.
+
+## 2026-06-15 distance-locked player jump and dash note
+
+- `TopDownPlayerMotor` jump and dash are now distance-controlled actions instead of leftover planar velocity. Accepted defaults are `jumpDistance = 6m`, `jumpDuration = 0.5s`, `jumpArcHeight = 2m`, `dashDistance = 6m`, and `dashDuration = 0.18s`.
+- `jumpDistance` is highlighted with a yellow inspector label and `jumpArcHeight` is highlighted with a red inspector label on the player motor so the prefab settings are easier to find.
+- Jump height is measured as foot/bottom-capsule clearance from the grounded body position at jump start, not as top-of-capsule or visual-head height.
+- Jump and dash clear planar/external carry-over velocity when they start and finish; an air dash during a jump adds its configured dash distance while the jump still resolves landing through ground contact.
+- Player movement squash/stretch is now owned by `TopDownPlayerMotor` and multiplied into the existing attack bounce in `TopDownFacingController`. Dash squash overrides jump squash while the dash is active.
+- Landing feedback is separate from jump start: ordinary jump landing uses a small squash, and falls from at least `1m` use the stronger fall landing squash (`fallLandingHeightSquash = 0.33`).
+- `TopDownPlayer.prefab` and scene-local player objects in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` serialize the new jump/dash/squash defaults because current scene players are manually authored/unpacked rather than clean prefab instances.

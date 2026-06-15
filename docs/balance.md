@@ -9,7 +9,7 @@
 | Игрок | `Assets/Game/Prefabs/Player/TopDownPlayer.prefab`, `Assets/Game/Scripts/Player/PlayerResourceController.cs`, `Assets/Game/Scripts/Player/TopDownPlayerMotor.cs`, `Assets/Game/Scripts/Player/TopDownFacingController.cs` |
 | Противники | `Assets/Game/Prefabs/Enemies/EnemyMelee.prefab`, `Assets/Game/Prefabs/Enemies/EnemyShooter.prefab`, `Assets/Game/Prefabs/Enemies/EnemyExploder.prefab`, `Assets/Game/Scripts/AI/EnemyCapsuleController.cs` |
 | Коллектаблы | `Assets/Game/Resources/ResourcePickups/*.prefab`, `Assets/Game/Scripts/Interaction/ResourcePickupCollectible.cs`, `Assets/Game/Scripts/Interaction/WorldInteractable.cs` |
-| Магазины и контейнеры | `Assets/Game/Prefabs/PointOfInterest/Chest.prefab`, `Capsule.prefab`, `Store.prefab`, `HAMMER.prefab`, `WorldInteractable.cs` |
+| Магазины и контейнеры | `Assets/Game/Prefabs/PointOfInterest/Chest.prefab`, `Capsule.prefab`, `Store.prefab`, `HAMMER.prefab`, `Assets/Game/Scripts/Interaction/WorldInteractable.cs`, `Assets/Game/Scripts/Interaction/ShopInteractable.cs` |
 | Спавн | `Assets/Game/Prefabs/Spawning/EnemySpawnZone.prefab`, `Assets/Game/Scripts/AI/EnemySpawnZone.cs` |
 
 ## Номиналы коллектаблов
@@ -44,7 +44,7 @@
 | `HAMMER` | Щит +100 | `500` золота | `+100` max shield |
 | `HAMMER` | HP +100 | `500` золота | `+100` max HP и `+100` текущего HP |
 
-Покупки у торговцев и кузнецов теперь задаются списком `shopItems` на `WorldInteractable` в prefab. Для repeatable-товаров удержание цифровой клавиши пункта повторяет покупку с ускорением до лимита `3` покупки в секунду.
+Покупки у торговцев и кузнецов задаются списком `shopItems` на `ShopInteractable` в prefab. `WorldInteractable` остается ресурсно-контейнерным компонентом и не должен использоваться как текущий shop-runtime. Для repeatable-товаров удержание цифровой клавиши пункта повторяет покупку с ускорением до лимита `3` покупки в секунду.
 
 ## Баланс противников
 

@@ -559,10 +559,15 @@ namespace RorType.Gameplay.Player
             }
 
             var targetScale = feedbackBaseLocalScale;
+            if (motor != null)
+            {
+                targetScale = Vector3.Scale(targetScale, motor.MovementVisualScale);
+            }
+
             if (bounceTimer > 0f)
             {
                 var progress = 1f - (bounceTimer / bounceDuration);
-                targetScale = Vector3.Scale(feedbackBaseLocalScale, EvaluateBounceScale(progress));
+                targetScale = Vector3.Scale(targetScale, EvaluateBounceScale(progress));
             }
 
             var scaleBlend = 1f - Mathf.Exp(-bounceScaleSharpness * deltaTime);

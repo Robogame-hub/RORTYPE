@@ -3,6 +3,14 @@ using UnityEngine;
 
 namespace RorType.Gameplay.Player
 {
+    public sealed class YellowInspectorLabelAttribute : PropertyAttribute
+    {
+    }
+
+    public sealed class RedInspectorLabelAttribute : PropertyAttribute
+    {
+    }
+
     [RequireComponent(typeof(Rigidbody))]
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(TopDownInputAdapter))]
@@ -27,14 +35,16 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
 
         [Header("Jump")]
-        [SerializeField, Min(0f)] private float jumpSpeed = 8f;
+        [SerializeField, Min(0.1f), YellowInspectorLabel] private float jumpDistance = 6f;
+        [SerializeField, Min(0.05f)] private float jumpDuration = 0.5f;
+        [SerializeField, Min(0f), RedInspectorLabel] private float jumpArcHeight = 2f;
         [SerializeField, Min(0f)] private float jumpBufferTime = 0.12f;
         [SerializeField, Min(0f)] private float coyoteTime = 0.12f;
         [SerializeField, Min(0f)] private float jumpGroundSnapLockTime = 0.16f;
 
         [Header("Dash")]
-        [SerializeField, Min(0.1f)] private float dashDistance = 5f;
-        [SerializeField, Min(0.01f)] private float dashDuration = 0.16f;
+        [SerializeField, Min(0.1f)] private float dashDistance = 6f;
+        [SerializeField, Min(0.01f)] private float dashDuration = 0.18f;
         [SerializeField, Min(0f)] private float dashCooldown = 0.65f;
         [SerializeField, Min(1)] private int maxDashCharges = 2;
         [SerializeField, Min(0.01f)] private float dashChargeRecoveryTime = 5f;
@@ -46,6 +56,18 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float knockbackDamping = 18f;
         [SerializeField, Min(0f)] private float maxExternalPlanarSpeed = 10f;
 
+        [Header("Squash")]
+        [SerializeField, Min(0.01f)] private float movementScaleSharpness = 30f;
+        [SerializeField, Min(0f)] private float jumpSideSquash = 0.2f;
+        [SerializeField, Min(0f)] private float jumpHeightSquash = 0.32f;
+        [SerializeField, Min(0f)] private float jumpStretch = 0.12f;
+        [SerializeField, Min(0f)] private float dashSideSquash = 0.25f;
+        [SerializeField, Range(0f, 0.9f)] private float dashHeightSquash = 0.5f;
+        [SerializeField, Min(0.01f)] private float landingSquashDuration = 0.18f;
+        [SerializeField, Range(0f, 0.9f)] private float jumpLandingHeightSquash = 0.16f;
+        [SerializeField, Min(0f)] private float fallLandingThreshold = 1f;
+        [SerializeField, Range(0f, 0.9f)] private float fallLandingHeightSquash = 0.33f;
+
         private Rigidbody body;
         private CapsuleCollider capsuleCollider;
         private TopDownInputAdapter inputAdapter;
@@ -54,17 +76,26 @@ namespace RorType.Gameplay.Player
         private Vector3 planarVelocity;
         private Vector3 externalPlanarVelocity;
         private Vector3 dashDirection = Vector3.forward;
+        private Vector3 jumpDirection = Vector3.forward;
+        private Vector3 movementVisualScale = Vector3.one;
         private float verticalVelocity;
         private float jumpBufferTimer;
         private float coyoteTimer;
         private float groundSnapLockTimer;
-        private float dashTimer;
+        private float dashRemainingDistance;
         private float dashCooldownTimer;
         private float dashChargeRecoveryTimer;
+        private float jumpRemainingDistance;
+        private float jumpBaseBodyY;
+        private float landingSquashTimer;
+        private float landingHeightSquash;
+        private float highestAirY;
         private int dashCharges;
         private bool dashQueued;
         private bool airDashConsumed;
+        private bool isJumping;
         private bool isGroundedForLocomotion;
+        private bool wasAirborne;
         private bool hasVisualBasePose;
         private bool hasVisualPosition;
         private Vector3 visualBaseLocalPosition;
@@ -78,9 +109,10 @@ namespace RorType.Gameplay.Player
         public float CurrentSpeed { get; private set; }
         public bool IsGrounded => isGroundedForLocomotion;
         public bool IsSprinting { get; private set; }
-        public bool IsDashing => dashTimer > 0f;
+        public bool IsDashing => dashRemainingDistance > 0f;
         public int DashCharges => dashCharges;
         public int MaxDashCharges => GetMaxDashCharges();
+        public Vector3 MovementVisualScale => movementVisualScale;
         public Vector3 RenderPosition => visualRoot != null && visualRoot != transform && hasVisualPosition
             ? smoothedVisualWorldPosition
             : transform.position;
@@ -120,6 +152,7 @@ namespace RorType.Gameplay.Player
         private void LateUpdate()
         {
             UpdateVisualSmoothing();
+            UpdateMovementVisualScale(Time.deltaTime);
         }
 
         private void FixedUpdate()
@@ -130,36 +163,31 @@ namespace RorType.Gameplay.Player
             TryStartJump();
             TryStartDash();
 
+            if (isJumping || IsDashing)
+            {
+                UpdateDistanceControlledMovement(Time.fixedDeltaTime);
+                return;
+            }
+
             var moveInput = inputAdapter.MoveInput;
             var inputMagnitude = Mathf.Clamp01(moveInput.magnitude);
-            var desiredDirection = IsDashing
-                ? dashDirection
-                : ResolveWorldMoveDirection(moveInput);
+            var desiredDirection = ResolveWorldMoveDirection(moveInput);
 
             if (desiredDirection.sqrMagnitude > 0.0001f)
             {
                 LastWorldMoveDirection = desiredDirection;
             }
 
-            IsSprinting = !IsDashing && inputMagnitude > 0.1f && inputAdapter.SprintHeld && CanSprint(Time.fixedDeltaTime);
-            var targetSpeed = IsDashing
-                ? GetDashSpeed()
-                : (IsSprinting ? sprintSpeed : walkSpeed) * inputMagnitude;
+            IsSprinting = inputMagnitude > 0.1f && inputAdapter.SprintHeld && CanSprint(Time.fixedDeltaTime);
+            var targetSpeed = (IsSprinting ? sprintSpeed : walkSpeed) * inputMagnitude;
             var targetPlanarVelocity = new Vector3(desiredDirection.x, 0f, desiredDirection.z) * targetSpeed;
 
-            if (IsDashing)
-            {
-                planarVelocity = targetPlanarVelocity;
-            }
-            else
-            {
-                var controlFactor = isGroundedForLocomotion ? 1f : airControlPercent;
-                var moveRate = targetPlanarVelocity.sqrMagnitude > 0.0001f ? acceleration : deceleration;
-                planarVelocity = Vector3.MoveTowards(
-                    planarVelocity,
-                    targetPlanarVelocity,
-                    moveRate * controlFactor * Time.fixedDeltaTime);
-            }
+            var controlFactor = isGroundedForLocomotion ? 1f : airControlPercent;
+            var moveRate = targetPlanarVelocity.sqrMagnitude > 0.0001f ? acceleration : deceleration;
+            planarVelocity = Vector3.MoveTowards(
+                planarVelocity,
+                targetPlanarVelocity,
+                moveRate * controlFactor * Time.fixedDeltaTime);
 
             externalPlanarVelocity = Vector3.MoveTowards(
                 externalPlanarVelocity,
@@ -218,13 +246,20 @@ namespace RorType.Gameplay.Player
             jumpBufferTimer = 0f;
             coyoteTimer = 0f;
             groundSnapLockTimer = 0f;
-            dashTimer = 0f;
+            dashRemainingDistance = 0f;
             dashCooldownTimer = 0f;
             dashChargeRecoveryTimer = 0f;
+            jumpRemainingDistance = 0f;
+            jumpBaseBodyY = transform.position.y;
+            landingSquashTimer = 0f;
+            landingHeightSquash = 0f;
             dashCharges = GetMaxDashCharges();
             dashQueued = false;
             airDashConsumed = false;
+            isJumping = false;
+            wasAirborne = false;
             externalPlanarVelocity = Vector3.zero;
+            movementVisualScale = Vector3.one;
             hasVisualPosition = false;
             if (visualRoot != null)
             {
@@ -291,13 +326,24 @@ namespace RorType.Gameplay.Player
         private void OnValidate()
         {
             sprintSpeed = Mathf.Max(sprintSpeed, walkSpeed);
+            jumpDistance = Mathf.Max(0.1f, jumpDistance);
+            jumpDuration = Mathf.Max(0.05f, jumpDuration);
+            jumpArcHeight = Mathf.Max(0f, jumpArcHeight);
             dashDuration = Mathf.Max(0.01f, dashDuration);
+            dashDistance = Mathf.Max(0.1f, dashDistance);
             maxDashCharges = Mathf.Max(1, maxDashCharges);
             dashChargeRecoveryTime = Mathf.Max(0.01f, dashChargeRecoveryTime);
             dashImpactDamage = Mathf.Max(0f, dashImpactDamage);
             dashImpactImpulse = Mathf.Max(0f, dashImpactImpulse);
             groundedSlopeSnapDistance = Mathf.Max(0f, groundedSlopeSnapDistance);
             wallSkinWidth = Mathf.Max(0f, wallSkinWidth);
+            movementScaleSharpness = Mathf.Max(0.01f, movementScaleSharpness);
+            jumpSideSquash = Mathf.Max(0f, jumpSideSquash);
+            jumpHeightSquash = Mathf.Max(0f, jumpHeightSquash);
+            jumpStretch = Mathf.Max(0f, jumpStretch);
+            dashSideSquash = Mathf.Max(0f, dashSideSquash);
+            landingSquashDuration = Mathf.Max(0.01f, landingSquashDuration);
+            fallLandingThreshold = Mathf.Max(0f, fallLandingThreshold);
         }
 
         private float ResolveGroundedBodyPositionY()
@@ -518,7 +564,7 @@ namespace RorType.Gameplay.Player
             jumpBufferTimer = Mathf.Max(0f, jumpBufferTimer - deltaTime);
             coyoteTimer = Mathf.Max(0f, coyoteTimer - deltaTime);
             groundSnapLockTimer = Mathf.Max(0f, groundSnapLockTimer - deltaTime);
-            dashTimer = Mathf.Max(0f, dashTimer - deltaTime);
+            landingSquashTimer = Mathf.Max(0f, landingSquashTimer - deltaTime);
             dashCooldownTimer = Mathf.Max(0f, dashCooldownTimer - deltaTime);
             TickDashChargeRecovery(deltaTime);
         }
@@ -545,18 +591,60 @@ namespace RorType.Gameplay.Player
             visualRoot.position = smoothedVisualWorldPosition;
         }
 
+        private void UpdateMovementVisualScale(float deltaTime)
+        {
+            var targetScale = Vector3.one;
+            if (IsDashing)
+            {
+                targetScale = EvaluateDashSquashScale();
+            }
+            else if (isJumping)
+            {
+                targetScale = EvaluateJumpSquashScale();
+            }
+            else if (landingSquashTimer > 0f)
+            {
+                targetScale = EvaluateLandingSquashScale();
+            }
+
+            var blend = 1f - Mathf.Exp(-movementScaleSharpness * Mathf.Max(0f, deltaTime));
+            movementVisualScale = Vector3.Lerp(movementVisualScale, targetScale, blend);
+        }
+
         private void RefreshGroundedState()
         {
             var probeStable = groundProbe.IsStableGround;
-            isGroundedForLocomotion = probeStable && groundSnapLockTimer <= 0f && verticalVelocity <= 0.01f;
+            isGroundedForLocomotion = !isJumping && probeStable && groundSnapLockTimer <= 0f && verticalVelocity <= 0.01f;
 
             if (isGroundedForLocomotion)
             {
+                if (wasAirborne)
+                {
+                    var fallDistance = Mathf.Max(0f, highestAirY - body.position.y);
+                    if (fallDistance >= fallLandingThreshold)
+                    {
+                        TriggerLandingSquash(fallLandingHeightSquash);
+                    }
+                }
+
+                wasAirborne = false;
                 coyoteTimer = coyoteTime;
                 airDashConsumed = false;
                 if (!IsDashing)
                 {
                     verticalVelocity = 0f;
+                }
+            }
+            else
+            {
+                if (!wasAirborne)
+                {
+                    highestAirY = body.position.y;
+                    wasAirborne = true;
+                }
+                else
+                {
+                    highestAirY = Mathf.Max(highestAirY, body.position.y);
                 }
             }
         }
@@ -576,8 +664,17 @@ namespace RorType.Gameplay.Player
             jumpBufferTimer = 0f;
             coyoteTimer = 0f;
             groundSnapLockTimer = Mathf.Max(groundSnapLockTimer, jumpGroundSnapLockTime);
-            verticalVelocity = jumpSpeed;
-            body.linearVelocity = new Vector3(planarVelocity.x, verticalVelocity, planarVelocity.z);
+            jumpDirection = ResolveJumpDirection();
+            jumpRemainingDistance = jumpDistance;
+            jumpBaseBodyY = groundProbe.IsStableGround
+                ? ResolveGroundedBodyPositionY(groundProbe.GroundPoint)
+                : body.position.y;
+            isJumping = true;
+            isGroundedForLocomotion = false;
+            planarVelocity = Vector3.zero;
+            externalPlanarVelocity = Vector3.zero;
+            verticalVelocity = 0f;
+            body.linearVelocity = Vector3.zero;
             body.WakeUp();
         }
 
@@ -617,8 +714,10 @@ namespace RorType.Gameplay.Player
 
             dashDirection = direction.normalized;
             LastWorldMoveDirection = dashDirection;
-            dashTimer = dashDuration;
+            dashRemainingDistance = dashDistance;
             dashCooldownTimer = dashCooldown;
+            planarVelocity = Vector3.zero;
+            externalPlanarVelocity = Vector3.zero;
             ClearDashImpactDamageables();
             dashCharges = Mathf.Max(0, dashCharges - 1);
             var effectiveMaxDashCharges = GetMaxDashCharges();
@@ -694,9 +793,206 @@ namespace RorType.Gameplay.Player
             return LastWorldMoveDirection;
         }
 
+        private Vector3 ResolveJumpDirection()
+        {
+            var desiredDirection = ResolveWorldMoveDirection(inputAdapter.MoveInput);
+            if (desiredDirection.sqrMagnitude > 0.0001f)
+            {
+                return desiredDirection.normalized;
+            }
+
+            return LastWorldMoveDirection.sqrMagnitude > 0.0001f
+                ? LastWorldMoveDirection.normalized
+                : Vector3.forward;
+        }
+
         private float GetDashSpeed()
         {
             return dashDistance / dashDuration;
+        }
+
+        private float GetJumpSpeed()
+        {
+            return jumpDistance / jumpDuration;
+        }
+
+        private void UpdateDistanceControlledMovement(float deltaTime)
+        {
+            IsSprinting = false;
+
+            externalPlanarVelocity = Vector3.MoveTowards(
+                externalPlanarVelocity,
+                Vector3.zero,
+                knockbackDamping * deltaTime);
+
+            var currentPosition = body.position;
+            var plannedPlanarStep = Vector3.zero;
+            var jumpStepDistance = 0f;
+            var dashStepDistance = 0f;
+
+            if (isJumping)
+            {
+                jumpStepDistance = Mathf.Min(jumpRemainingDistance, GetJumpSpeed() * deltaTime);
+                plannedPlanarStep += jumpDirection * jumpStepDistance;
+            }
+
+            if (IsDashing)
+            {
+                dashStepDistance = Mathf.Min(dashRemainingDistance, GetDashSpeed() * deltaTime);
+                plannedPlanarStep += dashDirection * dashStepDistance;
+            }
+
+            var targetPosition = currentPosition + plannedPlanarStep;
+            targetPosition.y = currentPosition.y;
+
+            if (plannedPlanarStep.sqrMagnitude > 0.000001f)
+            {
+                targetPosition = ResolveCollisionAwareGroundedPosition(currentPosition, targetPosition);
+            }
+
+            var actualPlanarStep = targetPosition - currentPosition;
+            actualPlanarStep.y = 0f;
+            var blocked = plannedPlanarStep.sqrMagnitude > 0.000001f
+                && actualPlanarStep.magnitude + 0.001f < plannedPlanarStep.magnitude;
+
+            if (isJumping)
+            {
+                jumpRemainingDistance = blocked
+                    ? 0f
+                    : Mathf.Max(0f, jumpRemainingDistance - jumpStepDistance);
+            }
+
+            if (IsDashing)
+            {
+                dashRemainingDistance = blocked
+                    ? 0f
+                    : Mathf.Max(0f, dashRemainingDistance - dashStepDistance);
+            }
+
+            var groundSamplePosition = targetPosition;
+            if (isJumping)
+            {
+                groundSamplePosition.y = jumpBaseBodyY;
+            }
+
+            var hasStableGroundBelow = groundProbe.TrySampleStableGround(
+                groundSamplePosition,
+                groundedSlopeSnapDistance,
+                out var sampledGroundPoint,
+                out _);
+
+            if (isJumping)
+            {
+                var jumpProgress = GetJumpProgress();
+                var arcOffset = EvaluateJumpArc(jumpProgress);
+                var baseBodyY = hasStableGroundBelow
+                    ? ResolveGroundedBodyPositionY(sampledGroundPoint)
+                    : jumpBaseBodyY;
+                jumpBaseBodyY = baseBodyY;
+                targetPosition.y = baseBodyY + arcOffset;
+
+                if (jumpRemainingDistance <= 0.0001f)
+                {
+                    if (hasStableGroundBelow)
+                    {
+                        targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+                        TriggerLandingSquash(jumpLandingHeightSquash);
+                        wasAirborne = false;
+                        highestAirY = targetPosition.y;
+                    }
+
+                    isJumping = false;
+                    verticalVelocity = hasStableGroundBelow ? 0f : -extraFallGravity * deltaTime;
+                    groundSnapLockTimer = 0f;
+                }
+            }
+            else if (isGroundedForLocomotion && hasStableGroundBelow)
+            {
+                targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+            }
+            else
+            {
+                verticalVelocity += -extraFallGravity * deltaTime;
+                targetPosition.y += verticalVelocity * deltaTime;
+            }
+
+            if (!isJumping)
+            {
+                targetPosition = ResolvePenetrationFreePosition(targetPosition);
+            }
+
+            body.linearVelocity = Vector3.zero;
+            body.MovePosition(targetPosition);
+
+            planarVelocity = Vector3.zero;
+            CurrentSpeed = actualPlanarStep.magnitude / Mathf.Max(0.0001f, deltaTime);
+        }
+
+        private float GetJumpProgress()
+        {
+            return jumpDistance <= 0.0001f
+                ? 1f
+                : Mathf.Clamp01(1f - (jumpRemainingDistance / jumpDistance));
+        }
+
+        private float GetDashProgress()
+        {
+            return dashDistance <= 0.0001f
+                ? 1f
+                : Mathf.Clamp01(1f - (dashRemainingDistance / dashDistance));
+        }
+
+        private float EvaluateJumpArc(float progress)
+        {
+            progress = Mathf.Clamp01(progress);
+            return jumpArcHeight * 4f * progress * (1f - progress);
+        }
+
+        private Vector3 EvaluateJumpSquashScale()
+        {
+            var progress = GetJumpProgress();
+            if (progress < 0.22f)
+            {
+                var strength = Mathf.Sin((1f - (progress / 0.22f)) * Mathf.PI * 0.5f);
+                return new Vector3(
+                    1f + (jumpSideSquash * strength),
+                    1f - (jumpHeightSquash * strength),
+                    1f + (jumpSideSquash * strength));
+            }
+
+            var stretchProgress = Mathf.Clamp01((progress - 0.22f) / 0.42f);
+            var stretchStrength = Mathf.Sin(stretchProgress * Mathf.PI) * (1f - stretchProgress);
+            return new Vector3(
+                1f - (jumpStretch * 0.5f * stretchStrength),
+                1f + (jumpStretch * stretchStrength),
+                1f - (jumpStretch * 0.5f * stretchStrength));
+        }
+
+        private Vector3 EvaluateDashSquashScale()
+        {
+            var progress = GetDashProgress();
+            var strength = Mathf.Sin(progress * Mathf.PI);
+            return new Vector3(
+                1f + (dashSideSquash * strength),
+                1f - (dashHeightSquash * strength),
+                1f + (dashSideSquash * strength));
+        }
+
+        private Vector3 EvaluateLandingSquashScale()
+        {
+            var progress = 1f - Mathf.Clamp01(landingSquashTimer / landingSquashDuration);
+            var strength = Mathf.Sin((1f - progress) * Mathf.PI * 0.5f);
+            var sideSquash = landingHeightSquash * 0.5f;
+            return new Vector3(
+                1f + (sideSquash * strength),
+                1f - (landingHeightSquash * strength),
+                1f + (sideSquash * strength));
+        }
+
+        private void TriggerLandingSquash(float heightSquash)
+        {
+            landingHeightSquash = Mathf.Clamp01(heightSquash);
+            landingSquashTimer = landingSquashDuration;
         }
 
         private Transform ResolveVisualRoot()

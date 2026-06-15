@@ -29300,12 +29300,14 @@ MonoBehaviour:
   groundedSlopeSnapDistance: 0.65
   wallSkinWidth: 0.05
   visualPositionSharpness: 30
-  jumpSpeed: 8
+  jumpDistance: 6
+  jumpDuration: 0.5
+  jumpArcHeight: 2
   jumpBufferTime: 0.12
   coyoteTime: 0.12
   jumpGroundSnapLockTime: 0.16
-  dashDistance: 5
-  dashDuration: 0.16
+  dashDistance: 6
+  dashDuration: 0.18
   dashCooldown: 0.65
   maxDashCharges: 2
   dashChargeRecoveryTime: 5
@@ -29314,6 +29316,16 @@ MonoBehaviour:
   dashImpactImpulse: 3
   knockbackDamping: 18
   maxExternalPlanarSpeed: 10
+  movementScaleSharpness: 30
+  jumpSideSquash: 0.2
+  jumpHeightSquash: 0.32
+  jumpStretch: 0.12
+  dashSideSquash: 0.25
+  dashHeightSquash: 0.5
+  landingSquashDuration: 0.18
+  jumpLandingHeightSquash: 0.16
+  fallLandingThreshold: 1
+  fallLandingHeightSquash: 0.33
 --- !u!114 &651250632
 MonoBehaviour:
   m_ObjectHideFlags: 0
