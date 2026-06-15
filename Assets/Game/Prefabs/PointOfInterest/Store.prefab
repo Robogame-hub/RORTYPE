@@ -50,13 +50,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
   trackedTransform: {fileID: 5327625604638039283}
   iconGroup: 2
   markerShape: 1
   iconColor: {r: 0.2, g: 0.55, b: 1, a: 1}
   markerSize: 25
+  scaleMarkerToWorldBounds: 0
+  markerWorldSizeMeters: {x: 0, y: 0}
   rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}
 --- !u!135 &901001001001001102
@@ -90,12 +92,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1d1b18230c9541de909a78c2972a7341, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.WorldInteractable
   mode: 0
-  shopKind: 1
   interactionRadius: 7
-  interactionPrompt: "\u041A\u0443\u043F\u0438\u0442\u044C: \u043D\u0430\u0436\u043C\u0438\u0442\u0435 E"
+  interactionPrompt: "\u041A\u0443\u043F\u0438\u0442\u044C: \u043D\u0430\u0436\u043C\u0438\u0442\u0435
+    E"
   completedPrompt: "\u041A\u0443\u043F\u043B\u0435\u043D\u043E"
   ammoReward: 0
   moneyReward: 0
@@ -103,43 +105,17 @@ MonoBehaviour:
   disableMinimapMarkerOnComplete: 1
   autoCreateInteractionTrigger: 1
   feedbackDuration: 1.2
-  ammoPurchaseAmount: 10
-  ammoPurchaseCost: 10
-  healthPurchaseAmount: 20
-  healthPurchaseCost: 20
-  damageUpgradeCost: 100
-  shopItems:
-  - itemType: 0
-    displayName: "\u041F\u0430\u0442\u0440\u043E\u043D\u044B"
-    cost: 10
-    amount: 10
-    repeatWhileHeld: 1
-    hideWhenUnavailable: 0
-  - itemType: 1
-    displayName: "\u041B\u0435\u0447\u0435\u043D\u0438\u0435"
-    cost: 20
-    amount: 20
-    repeatWhileHeld: 1
-    hideWhenUnavailable: 0
-  - itemType: 2
-    displayName: "\u041F\u043E\u043B\u043D\u043E\u0435 \u043B\u0435\u0447\u0435\u043D\u0438\u0435"
-    cost: 500
-    amount: 0
-    repeatWhileHeld: 0
-    hideWhenUnavailable: 0
-  - itemType: 3
-    displayName: "\u0414\u043E\u043F. \u0449\u0438\u0442"
-    cost: 100
-    amount: 100
-    repeatWhileHeld: 0
-    hideWhenUnavailable: 1
-  - itemType: 4
-    displayName: "\u0412\u043E\u0441\u0441\u0442. \u0449\u0438\u0442"
-    cost: 100
-    amount: 0
-    repeatWhileHeld: 1
-    hideWhenUnavailable: 1
   pickupDisappearDelay: 0.7
+  containerMoneyPickupPrefab: {fileID: 0}
+  containerAmmoPickupPrefab: {fileID: 0}
+  containerHealthPickupPrefab: {fileID: 0}
+  containerMoneyPickupCount: 10
+  containerMoneyPerPickup: 10
+  containerAmmoPickupCount: 5
+  containerAmmoPerPickup: 10
+  containerHealthDropChance: 0.6
+  containerHealthAmount: 150
+  containerDropLaunchSpeed: 4.2
 --- !u!114 &901001001001001302
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -150,11 +126,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8d471dfdf3024c34b9d6a4e698027f87, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.ShopInteractable
   shopKind: 1
   interactionRadius: 7
-  interactionPrompt: "\u0422\u043E\u0440\u0433\u043E\u0432\u0435\u0446: \u043D\u0430\u0436\u043C\u0438\u0442\u0435 E"
+  interactionPrompt: "\u0422\u043E\u0440\u0433\u043E\u0432\u0435\u0446: \u043D\u0430\u0436\u043C\u0438\u0442\u0435
+    E"
   shopUi: {fileID: 0}
   shopItems:
   - itemType: 0
@@ -850,7 +827,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: c22777d6e868e4f2fb421913386b154e, type: 2}
+  - {fileID: 2100000, guid: 9ec9ae56b49bc64479611146225f0e62, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1461,7 +1438,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: c22777d6e868e4f2fb421913386b154e, type: 2}
+  - {fileID: 2100000, guid: fb4297963cd7bcd48b0bd9ffa8397df7, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1834,7 +1811,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: c22777d6e868e4f2fb421913386b154e, type: 2}
+  - {fileID: 2100000, guid: 883e689dfa4847941bce434d7db80613, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2207,7 +2184,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: c22777d6e868e4f2fb421913386b154e, type: 2}
+  - {fileID: 2100000, guid: fb4297963cd7bcd48b0bd9ffa8397df7, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2818,7 +2795,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: c22777d6e868e4f2fb421913386b154e, type: 2}
+  - {fileID: 2100000, guid: fb4297963cd7bcd48b0bd9ffa8397df7, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

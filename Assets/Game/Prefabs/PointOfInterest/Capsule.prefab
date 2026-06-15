@@ -547,7 +547,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 6bd430d605b86ab4a8d16567366aea15, type: 2}
+  - {fileID: 2100000, guid: 25a47501e80a0d24186f399928f8d506, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1141,7 +1141,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 7ca841af54fff5e48a35df35eabf808a, type: 2}
+  - {fileID: 2100000, guid: 9ec9ae56b49bc64479611146225f0e62, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1249,6 +1249,8 @@ MonoBehaviour:
   markerShape: 0
   iconColor: {r: 0.2, g: 0.55, b: 1, a: 1}
   markerSize: 14
+  scaleMarkerToWorldBounds: 0
+  markerWorldSizeMeters: {x: 0, y: 0}
   rotateWithWorldYaw: 0
   worldOffset: {x: 0, y: 0, z: 0}
 --- !u!135 &901001001001001103
@@ -1285,9 +1287,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.WorldInteractable
   mode: 1
-  shopKind: 0
   interactionRadius: 7
-  interactionPrompt: "\u0412\u0437\u044F\u0442\u044C: \u043D\u0430\u0436\u043C\u0438\u0442\u0435 E"
+  interactionPrompt: "\u0412\u0437\u044F\u0442\u044C: \u043D\u0430\u0436\u043C\u0438\u0442\u0435
+    E"
   completedPrompt: "\u0412\u0437\u044F\u0442\u043E"
   ammoReward: 100
   moneyReward: 200
@@ -1295,12 +1297,17 @@ MonoBehaviour:
   disableMinimapMarkerOnComplete: 1
   autoCreateInteractionTrigger: 1
   feedbackDuration: 1.2
-  ammoPurchaseAmount: 1
-  ammoPurchaseCost: 1
-  healthPurchaseAmount: 20
-  healthPurchaseCost: 20
-  damageUpgradeCost: 1000
   pickupDisappearDelay: 0.7
+  containerMoneyPickupPrefab: {fileID: 0}
+  containerAmmoPickupPrefab: {fileID: 0}
+  containerHealthPickupPrefab: {fileID: 0}
+  containerMoneyPickupCount: 10
+  containerMoneyPerPickup: 10
+  containerAmmoPickupCount: 5
+  containerAmmoPerPickup: 10
+  containerHealthDropChance: 0.6
+  containerHealthAmount: 150
+  containerDropLaunchSpeed: 4.2
 --- !u!1 &8427631788717279904
 GameObject:
   m_ObjectHideFlags: 0
@@ -1841,7 +1848,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 2bb2d8ff90be58640ba01c9cb1af76e5, type: 2}
+  - {fileID: 2100000, guid: 9dacba553faf37640b9b190387e0d6a4, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
