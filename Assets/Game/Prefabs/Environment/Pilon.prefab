@@ -408,6 +408,7 @@ GameObject:
   - component: {fileID: 2450950979309542228}
   - component: {fileID: 8985550855056403645}
   - component: {fileID: 1500521102686760075}
+  - component: {fileID: 528033501546486001}
   m_Layer: 0
   m_Name: Cube
   m_TagString: Untagged
@@ -750,6 +751,22 @@ MeshCollider:
   m_Convex: 0
   m_CookingOptions: 30
   m_Mesh: {fileID: 0}
+--- !u!208 &528033501546486001
+NavMeshObstacle:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3718245869908810844}
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Shape: 1
+  m_Extents: {x: 1.5, y: 4, z: 1.5}
+  m_MoveThreshold: 0.1
+  m_Carve: 1
+  m_CarveOnlyStationary: 1
+  m_Center: {x: 0, y: 0.97, z: 0}
+  m_TimeToStationary: 0.5
 --- !u!1 &4863626614546199477
 GameObject:
   m_ObjectHideFlags: 0
