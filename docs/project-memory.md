@@ -346,7 +346,7 @@
 
 - Portal travel is now fully portal-instance-driven instead of relying on a hardcoded scene graph. Each `ScenePortal` exposes a serialized `destinations` list, and every destination now stores only `buttonLabel` plus `sceneName`.
 - Spawn-point-based scene arrival has been removed. `PlayerSpawnPoint`, `PlayerSceneSpawnController`, `PortalTravelRuntime`, the old `PlayerSpawnPoint` prefab, and `PortalSystemBuilder` are no longer part of the accepted portal workflow.
-- The player still interacts with portals via `E`, but active portal discovery is now trigger-contact-based: `ScenePortal` tracks `ScenePortalInteractionController` instances inside its trigger zone, and `ScenePortalInteractionController` only prompts/interacts with touched portals.
+- The player still interacts with portals via `E`. `ScenePortal` tracks `ScenePortalInteractionController` instances inside its trigger zone, and `ScenePortalInteractionController` can also fall back to the portal's serialized interaction radius when resolving the active prompt/interaction.
 - `interactionRadius` remains the accepted default trigger radius (`7m`). `Assets/Game/Prefabs/Portal.prefab` has an explicit root `SphereCollider` trigger, and `ScenePortal` still auto-creates one at runtime if an older/custom portal root has no trigger collider.
 - `ScenePortal` now recolors the child renderer(s) named `Sphere` when the player is touching the active trigger zone. The prefab-default colors are an idle blue tint and a brighter green-blue active tint.
 - When a portal has more than one destination, `PortalUiRuntime` still opens a runtime uGUI choice panel with clickable buttons and numeric hotkeys; single-destination portals load the configured target scene immediately.
@@ -574,7 +574,7 @@
 ## 2026-06-15 player hit feedback and fall threshold
 
 - `PlayerResourceController.ReceiveHit` now triggers a white multi-blink hit flash on the player's own visual renderers after any accepted non-player hit, including hits fully absorbed by shield. Runtime melee fist renderers are excluded so their attack color is not reset.
-- Player fall respawn/death threshold is now `7m` through `PlayerRespawnController.fallDistance`, serialized on `TopDownPlayer.prefab` and scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+- Player fall respawn/death threshold is now `5m` through `PlayerRespawnController.fallDistance`, serialized on `TopDownPlayer.prefab` and scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 
 ## 2026-06-15 elevator platform note
 
@@ -605,10 +605,18 @@
 
 ## 2026-06-15 distance-locked player jump and dash note
 
-- `TopDownPlayerMotor` jump and dash are now distance-controlled actions instead of leftover planar velocity. Accepted defaults are `jumpDistance = 6m`, `jumpDuration = 0.5s`, `jumpArcHeight = 2m`, `dashDistance = 6m`, and `dashDuration = 0.18s`.
+- `TopDownPlayerMotor` jump and dash are now distance-controlled actions instead of leftover planar velocity. Accepted defaults are `jumpDistance = 8m`, `jumpDuration = 0.5s`, `jumpArcHeight = 4m`, `dashDistance = 6m`, and `dashDuration = 0.18s`.
 - `jumpDistance` is highlighted with a yellow inspector label and `jumpArcHeight` is highlighted with a red inspector label on the player motor so the prefab settings are easier to find.
 - Jump height is measured as foot/bottom-capsule clearance from the grounded body position at jump start, not as top-of-capsule or visual-head height.
+- Jump/dash action directions are resolved as horizontal XZ directions, while their height follows sampled stable ground with a per-step slope allowance so ramps do not cancel distance-controlled actions.
 - Jump and dash clear planar/external carry-over velocity when they start and finish; an air dash during a jump adds its configured dash distance while the jump still resolves landing through ground contact.
 - Player movement squash/stretch is now owned by `TopDownPlayerMotor` and multiplied into the existing attack bounce in `TopDownFacingController`. Dash squash overrides jump squash while the dash is active.
 - Landing feedback is separate from jump start: ordinary jump landing uses a small squash, and falls from at least `1m` use the stronger fall landing squash (`fallLandingHeightSquash = 0.33`).
 - `TopDownPlayer.prefab` and scene-local player objects in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` serialize the new jump/dash/squash defaults because current scene players are manually authored/unpacked rather than clean prefab instances.
+
+## 2026-06-16 interaction fallback note
+
+- `ScenePortalInteractionController` still prefers authored trigger contact for portals, shops, resource containers, totems, and totem pedestals, but now falls back to distance/trigger-bounds checks when resolving the closest `E` interaction. This protects scene interactions from missed `OnTriggerEnter/Stay` registration.
+- `WorldInteractable` and `ShopInteractable` expose `IsWithinInteractionRange` using their serialized `interactionRadius`; shops still require an authored trigger collider for availability.
+- `TotemPickup` and `TotemPedestal` expose trigger-bounds fallback checks from their authored colliders.
+- `PlayerMovementTest.unity` now has `ScenePortalInteractionController` on its scene-local `TopDownPlayer`, matching `TopDownPlayer.prefab`, `Level_1`, `Level_2`, and `Hub_1`.

@@ -113,6 +113,12 @@ namespace RorType.Gameplay.Interaction
             return interactor != null && touchingInteractors.Contains(interactor);
         }
 
+        public bool IsWithinInteractionRange(Vector3 worldPosition)
+        {
+            return interactionTrigger != null &&
+                   (transform.position - worldPosition).sqrMagnitude <= interactionRadius * interactionRadius;
+        }
+
         public float GetSqrDistanceTo(Vector3 worldPosition)
         {
             return (transform.position - worldPosition).sqrMagnitude;

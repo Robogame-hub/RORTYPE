@@ -35,9 +35,9 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.01f)] private float visualPositionSharpness = 30f;
 
         [Header("Jump")]
-        [SerializeField, Min(0.1f), YellowInspectorLabel] private float jumpDistance = 6f;
+        [SerializeField, Min(0.1f), YellowInspectorLabel] private float jumpDistance = 8f;
         [SerializeField, Min(0.05f)] private float jumpDuration = 0.5f;
-        [SerializeField, Min(0f), RedInspectorLabel] private float jumpArcHeight = 2f;
+        [SerializeField, Min(0f), RedInspectorLabel] private float jumpArcHeight = 4f;
         [SerializeField, Min(0f)] private float jumpBufferTime = 0.12f;
         [SerializeField, Min(0f)] private float coyoteTime = 0.12f;
         [SerializeField, Min(0f)] private float jumpGroundSnapLockTime = 0.16f;
@@ -787,10 +787,10 @@ namespace RorType.Gameplay.Player
             var desiredDirection = ResolveWorldMoveDirection(inputAdapter.MoveInput);
             if (desiredDirection.sqrMagnitude > 0.0001f)
             {
-                return desiredDirection;
+                return ResolvePlanarActionDirection(desiredDirection);
             }
 
-            return LastWorldMoveDirection;
+            return ResolvePlanarActionDirection(LastWorldMoveDirection);
         }
 
         private Vector3 ResolveJumpDirection()
@@ -798,12 +798,20 @@ namespace RorType.Gameplay.Player
             var desiredDirection = ResolveWorldMoveDirection(inputAdapter.MoveInput);
             if (desiredDirection.sqrMagnitude > 0.0001f)
             {
-                return desiredDirection.normalized;
+                return ResolvePlanarActionDirection(desiredDirection);
             }
 
             return LastWorldMoveDirection.sqrMagnitude > 0.0001f
-                ? LastWorldMoveDirection.normalized
+                ? ResolvePlanarActionDirection(LastWorldMoveDirection)
                 : Vector3.forward;
+        }
+
+        private Vector3 ResolvePlanarActionDirection(Vector3 direction)
+        {
+            direction = Vector3.ProjectOnPlane(direction, Vector3.up);
+            return direction.sqrMagnitude > 0.0001f
+                ? direction.normalized
+                : Vector3.zero;
         }
 
         private float GetDashSpeed()
@@ -844,6 +852,7 @@ namespace RorType.Gameplay.Player
 
             var targetPosition = currentPosition + plannedPlanarStep;
             targetPosition.y = currentPosition.y;
+            plannedPlanarStep.y = 0f;
 
             if (plannedPlanarStep.sqrMagnitude > 0.000001f)
             {
@@ -877,7 +886,7 @@ namespace RorType.Gameplay.Player
 
             var hasStableGroundBelow = groundProbe.TrySampleStableGround(
                 groundSamplePosition,
-                groundedSlopeSnapDistance,
+                GetDistanceControlledGroundSampleDistance(plannedPlanarStep),
                 out var sampledGroundPoint,
                 out _);
 
@@ -926,6 +935,12 @@ namespace RorType.Gameplay.Player
 
             planarVelocity = Vector3.zero;
             CurrentSpeed = actualPlanarStep.magnitude / Mathf.Max(0.0001f, deltaTime);
+        }
+
+        private float GetDistanceControlledGroundSampleDistance(Vector3 plannedPlanarStep)
+        {
+            var slopeRise = plannedPlanarStep.magnitude * Mathf.Tan(groundProbe.MaxSlopeAngle * Mathf.Deg2Rad);
+            return groundedSlopeSnapDistance + Mathf.Max(0f, slopeRise);
         }
 
         private float GetJumpProgress()

@@ -362,7 +362,7 @@
 Важное ограничение текущей реализации:
 
 - `dash` и прыжок уже добавлены в текущий тестовый контроллер как часть `TopDownPlayerMotor`, а не как отдельные ability-компоненты
-- На 2026-06-15 `dash` и прыжок в `TopDownPlayerMotor` являются distance-controlled действиями, а не остаточной физической инерцией: принятые значения `jumpDistance = 6m`, `jumpDuration = 0.5s`, `jumpArcHeight = 2m`, `dashDistance = 6m`, `dashDuration = 0.18s`. Рывок во время прыжка добавляет свою дистанцию, а после завершения действий planar/external carry-over velocity сбрасывается.
+- На 2026-06-15 `dash` и прыжок в `TopDownPlayerMotor` являются distance-controlled действиями, а не остаточной физической инерцией: принятые значения `jumpDistance = 8m`, `jumpDuration = 0.5s`, `jumpArcHeight = 4m`, `dashDistance = 6m`, `dashDuration = 0.18s`. Рывок во время прыжка добавляет свою дистанцию, а после завершения действий planar/external carry-over velocity сбрасывается. На подъёмах прыжок и рывок используют горизонтальное XZ-направление действия, а высоту берут из stable-ground sampling с allowance на перепад рампы за один action-step.
 - Поле `jumpDistance` выделено желтым label в Inspector через `YellowInspectorLabelAttribute`, а `jumpArcHeight` выделено красным label через `RedInspectorLabelAttribute`, чтобы настройки на `TopDownPlayer.prefab` было проще найти.
 - Высота прыжка считается от нижней точки капсулы/ног относительно grounded body position в момент старта прыжка, а не по макушке визуальной модели.
 - Squash/stretch игрока для прыжка, dash и приземления рассчитывает `TopDownPlayerMotor`; `TopDownFacingController` умножает этот множитель на существующий bounce от атаки. Пока активен dash, визуальный squash dash имеет приоритет над squash прыжка.
@@ -559,7 +559,7 @@
 Portal travel is now implemented as a real runtime scene-travel slice and no longer exists only at the design-document level.
 
 - `Assets/Game/Prefabs/Portal.prefab` is configured with `ScenePortal`, but portal routing is no longer hardcoded in the script. Each portal instance is now configured manually through a serialized `destinations` list, so the level setup decides where the portal can lead.
-- Portal interaction uses `E`, and the hint is handled by runtime UI instead of hand-authored scene canvases. Active portal discovery now uses trigger contact, not a raw distance check.
+- Portal interaction uses `E`, and the hint is handled by runtime UI instead of hand-authored scene canvases. Active portal discovery prefers trigger contact and falls back to the portal's serialized interaction radius if trigger registration is missed.
 - `Assets/Game/Prefabs/Portal.prefab` has an explicit root `SphereCollider` trigger with `7m` radius. If a custom or older portal root has no trigger collider, `ScenePortal` auto-creates a runtime `SphereCollider` trigger using `interactionRadius`, so those instances still get an active interaction volume.
 - While the player is touching the portal trigger, `ScenePortal` recolors the child mesh renderer(s) named `Sphere`, so the portal provides an in-world proximity signal in addition to the UI prompt.
 - Multi-destination portals open a runtime button choice panel (`PortalUiRuntime`) with mouse-click support and `1..9` keyboard shortcuts. Single-destination portals load the target scene immediately.
@@ -591,6 +591,13 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 - `Assets/Game/Scripts/Interaction/WorldInteractable.cs` adds portal-style proximity interaction for non-portal objects, using the existing `ScenePortalInteractionController` and `PortalUiRuntime` prompt.
 - `Store` and `HAMMER` prefabs have root `SphereCollider` trigger interaction and show `Buy: press E` / `Bought` style prompt behavior configured with Russian prefab text.
 - `Chest` and `Capsule` prefabs have root `SphereCollider` trigger interaction. Opening either container now spawns physical resource pickups, then disables its `MinimapTrackable` and trigger so it cannot be taken again.
+
+## Current interaction fallback implementation on 2026-06-16
+
+- `ScenePortalInteractionController` resolves `E` interactions through trigger contact first, then falls back to distance or authored trigger-bounds checks for portals, shops, chests/capsules, totem pickups, and totem pedestals.
+- Portal, shop, and resource-container fallback range uses the same serialized `interactionRadius` that sizes their authored/root trigger collider. Shops still require an authored trigger collider and do not create one at runtime.
+- Totem pickup and totem pedestal fallback checks use their authored trigger collider bounds plus a small player-overlap tolerance.
+- Scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest` have `ScenePortalInteractionController`; `PlayerMovementTest` also keeps `InteractionUi.prefab` for prompt/UI verification.
 
 ## Current economy, health, pickups, and destructibles on 2026-06-10
 
@@ -692,7 +699,7 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 
 - `PlayerResourceController.ReceiveHit` deducts shield/health, spawns the existing floating shield/HP damage text, and now also flashes the player's visual renderers white after any accepted non-player hit.
 - Player hit flashing excludes runtime melee fist renderers so attack visuals keep their configured red color after the flash.
-- `PlayerRespawnController.fallDistance` is now `7m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
+- `PlayerRespawnController.fallDistance` is now `5m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 
 ## Current player occlusion ghost implementation on 2026-06-15
 

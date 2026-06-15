@@ -93,6 +93,12 @@ namespace RorType.Gameplay.Interaction
             return mode == InteractionMode.ResourcePickup && interactor != null && touchingInteractors.Contains(interactor);
         }
 
+        public bool IsWithinInteractionRange(Vector3 worldPosition)
+        {
+            return mode == InteractionMode.ResourcePickup &&
+                   (transform.position - worldPosition).sqrMagnitude <= interactionRadius * interactionRadius;
+        }
+
         public float GetSqrDistanceTo(Vector3 worldPosition)
         {
             return (transform.position - worldPosition).sqrMagnitude;

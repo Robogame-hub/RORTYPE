@@ -132,7 +132,7 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                if (!portal.IsTouchedBy(this))
+                if (!portal.IsTouchedBy(this) && !portal.IsWithinInteractionRange(transform.position))
                 {
                     continue;
                 }
@@ -164,7 +164,7 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                if (!shop.IsTouchedBy(this))
+                if (!shop.IsTouchedBy(this) && !shop.IsWithinInteractionRange(transform.position))
                 {
                     continue;
                 }
@@ -196,7 +196,7 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                if (!pedestal.IsTouchedBy(this))
+                if (!pedestal.IsTouchedBy(this) && !pedestal.IsWithinInteractionRange(transform.position))
                 {
                     continue;
                 }
@@ -228,7 +228,7 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                if (!totem.IsTouchedBy(this))
+                if (!totem.IsTouchedBy(this) && !totem.IsWithinInteractionRange(transform.position))
                 {
                     continue;
                 }
@@ -260,7 +260,7 @@ namespace RorType.Gameplay.Interaction
                     continue;
                 }
 
-                if (!interactable.IsTouchedBy(this))
+                if (!interactable.IsTouchedBy(this) && !interactable.IsWithinInteractionRange(transform.position))
                 {
                     continue;
                 }

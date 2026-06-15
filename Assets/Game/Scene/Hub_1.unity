@@ -29226,7 +29226,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 08ed9e55030745ab80df4a46de88f20a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  fallDistance: 7
+  fallDistance: 5
   safePointMinDistance: 1.5
   respawnHeightOffset: 1.05
 --- !u!114 &651250630
@@ -29300,9 +29300,9 @@ MonoBehaviour:
   groundedSlopeSnapDistance: 0.65
   wallSkinWidth: 0.05
   visualPositionSharpness: 30
-  jumpDistance: 6
+  jumpDistance: 8
   jumpDuration: 0.5
-  jumpArcHeight: 2
+  jumpArcHeight: 4
   jumpBufferTime: 0.12
   coyoteTime: 0.12
   jumpGroundSnapLockTime: 0.16

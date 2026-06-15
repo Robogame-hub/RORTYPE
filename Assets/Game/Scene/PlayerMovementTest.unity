@@ -1154,6 +1154,7 @@ GameObject:
   - component: {fileID: 300100017}
   - component: {fileID: 300100011}
   - component: {fileID: 300100016}
+  - component: {fileID: 300100018}
   m_Layer: 0
   m_Name: TopDownPlayer
   m_TagString: Untagged
@@ -1350,9 +1351,9 @@ MonoBehaviour:
   groundedSlopeSnapDistance: 0.65
   wallSkinWidth: 0.05
   visualPositionSharpness: 30
-  jumpDistance: 6
+  jumpDistance: 8
   jumpDuration: 0.5
-  jumpArcHeight: 2
+  jumpArcHeight: 4
   jumpBufferTime: 0.12
   coyoteTime: 0.12
   jumpGroundSnapLockTime: 0.16
@@ -1439,7 +1440,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 08ed9e55030745ab80df4a46de88f20a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  fallDistance: 7
+  fallDistance: 5
   safePointMinDistance: 1.5
   respawnHeightOffset: 1.05
 --- !u!114 &300100016
@@ -1467,6 +1468,18 @@ MonoBehaviour:
   sprintDrainPerSecond: 10
   staminaRegenPerSecond: 35
   staminaRegenDelay: 0.45
+--- !u!114 &300100018
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 300100001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6b8013a6066f1242a031e0a18572fcb, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Interaction.ScenePortalInteractionController
 --- !u!1 &300100012
 GameObject:
   m_ObjectHideFlags: 0

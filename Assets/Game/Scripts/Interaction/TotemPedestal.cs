@@ -21,7 +21,9 @@ namespace RorType.Gameplay.Interaction
         [SerializeField, Min(0f)] private float emissionIntensity = 1.5f;
 
         private readonly HashSet<ScenePortalInteractionController> touchingInteractors = new();
+        private const float TriggerOverlapFallbackDistance = 0.75f;
         private MaterialPropertyBlock propertyBlock;
+        private Collider interactionTrigger;
         private bool hasTotem;
 
         public static IReadOnlyList<TotemPedestal> ActivePedestals => RegisteredPedestals;
@@ -57,6 +59,11 @@ namespace RorType.Gameplay.Interaction
         public bool IsTouchedBy(ScenePortalInteractionController interactor)
         {
             return IsAvailable && interactor != null && touchingInteractors.Contains(interactor);
+        }
+
+        public bool IsWithinInteractionRange(Vector3 worldPosition)
+        {
+            return IsAvailable && IsWithinTriggerOverlapFallback(interactionTrigger, worldPosition);
         }
 
         public float GetSqrDistanceTo(Vector3 worldPosition)
@@ -131,11 +138,28 @@ namespace RorType.Gameplay.Interaction
 
         private void EnsureTriggerCollider()
         {
-            var trigger = GetComponent<Collider>();
-            if (trigger != null)
+            interactionTrigger = GetComponent<Collider>();
+            if (interactionTrigger != null)
             {
-                trigger.isTrigger = true;
+                interactionTrigger.isTrigger = true;
             }
+        }
+
+        private static bool IsWithinTriggerOverlapFallback(Collider trigger, Vector3 worldPosition)
+        {
+            if (trigger == null || !trigger.enabled)
+            {
+                return false;
+            }
+
+            if (trigger.bounds.Contains(worldPosition))
+            {
+                return true;
+            }
+
+            var closestPoint = trigger.ClosestPoint(worldPosition);
+            return (closestPoint - worldPosition).sqrMagnitude <=
+                   TriggerOverlapFallbackDistance * TriggerOverlapFallbackDistance;
         }
 
         private void EnsureReferences()
