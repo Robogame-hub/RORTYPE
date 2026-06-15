@@ -86,7 +86,23 @@ namespace RorType.Gameplay.Environment
                     childCollider.enabled = true;
                 }
 
-                var body = child.gameObject.AddComponent<Rigidbody>();
+                var body = child.GetComponent<Rigidbody>();
+                if (body == null)
+                {
+                    body = child.gameObject.AddComponent<Rigidbody>();
+                }
+
+                if (body == null)
+                {
+                    Debug.LogWarning($"{nameof(DestructibleCover)} debris block '{child.name}' on {name} could not get a Rigidbody.", child);
+                    child.SetParent(null, true);
+                    Destroy(child.gameObject, debrisLifetime);
+                    i--;
+                    continue;
+                }
+
+                body.useGravity = true;
+                body.isKinematic = false;
                 body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
                 body.AddForce((pushDirection + Vector3.up * 0.6f + Random.insideUnitSphere * 0.3f) * Mathf.Max(2f, impulse + 2f), ForceMode.Impulse);
                 child.SetParent(null, true);

@@ -12,8 +12,9 @@ namespace RorType.Gameplay.AI
         [SerializeField, Min(0.01f)] private float healthBarWidth = 0.9f;
         [SerializeField, Min(0.01f)] private float healthBarHeight = 0.16f;
         [SerializeField, Min(0f)] private float healthFillOverlap = 0.01f;
-        [SerializeField, Min(0.01f)] private float healthTextScale = 0.075f;
-        [SerializeField, Min(0.01f)] private float damageTextScale = 0.09f;
+        [SerializeField, Min(0.01f)] private float healthTextScale = 0.225f;
+        [SerializeField, Min(0.01f)] private float damageTextScale = 0.16f;
+        [SerializeField, Min(0f)] private float textOutlineDistance = 0.018f;
 
         [Header("Colors")]
         [SerializeField] private Color healthFillColor = new Color(0.92f, 0.16f, 0.16f);
@@ -58,19 +59,12 @@ namespace RorType.Gameplay.AI
 
         public void SpawnDamageNumber(float damage, Vector3 worldPosition)
         {
-            var damageTextObject = new GameObject("DamageNumber");
-            damageTextObject.transform.position = worldPosition + new Vector3(
+            var damagePosition = worldPosition + new Vector3(
                 UnityEngine.Random.Range(-0.12f, 0.12f),
                 0.9f,
                 UnityEngine.Random.Range(-0.12f, 0.12f));
 
-            var textMesh = damageTextObject.AddComponent<TextMesh>();
-            ConfigureTextMesh(textMesh, damageTextColor, TextAnchor.MiddleCenter);
-            textMesh.alignment = TextAlignment.Center;
-
-            damageTextObject.AddComponent<WorldBillboard>();
-            var floatingText = damageTextObject.AddComponent<FloatingWorldText>();
-            floatingText.Initialize(Mathf.RoundToInt(damage).ToString(), damageTextColor, damageTextScale);
+            FloatingWorldText.Spawn(damagePosition, Mathf.RoundToInt(damage).ToString(), damageTextColor, damageTextScale);
         }
 
         private void EnsurePresentationBuilt()
@@ -126,6 +120,7 @@ namespace RorType.Gameplay.AI
             healthTextMesh = healthTextObject.AddComponent<TextMesh>();
             ConfigureTextMesh(healthTextMesh, healthTextColor, TextAnchor.MiddleCenter);
             healthTextMesh.alignment = TextAlignment.Center;
+            TextMeshOutline.AddTo(healthTextObject, textOutlineDistance);
         }
 
         private void ConfigureTextMesh(TextMesh textMesh, Color color, TextAnchor anchor)

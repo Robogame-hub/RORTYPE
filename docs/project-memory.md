@@ -593,4 +593,4 @@
 
 - `Assets/Game/Prefabs/UI/InteractionUi.prefab` is the authored scene UI for portal/interact prompts, portal destination buttons, and shop cards. It is placed as a prefab instance in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 - `PortalUiRuntime` and `ShopUiPanel` must not create Canvas, EventSystem, panels, buttons, or shop cards at runtime. Missing scene-authored interaction UI should produce a warning instead of fallback generation.
-- `FloatingWorldText` now enforces a larger readable minimum scale (`0.3`) and bold text so gold/ammo/HP pickup numbers are visible when they fly out of pickups.
+- `FloatingWorldText` now enforces a readable minimum scale (`0.9`), applies a `3x` scale multiplier to incoming text scale values, and renders a black `TextMeshOutline` so player damage, pickup rewards, and enemy damage numbers stay readable. Enemy damage numbers must use `FloatingWorldText.Spawn` instead of their own smaller `TextMesh` setup. Enemy overhead health text uses the same black outline and a larger `0.225` scale.
