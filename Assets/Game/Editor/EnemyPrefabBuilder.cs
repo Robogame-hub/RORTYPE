@@ -100,8 +100,8 @@ namespace RorType.Gameplay.Editor
             body.mass = 55f;
             body.useGravity = false;
             body.isKinematic = true;
-            body.linearDamping = 0f;
-            body.angularDamping = 0.05f;
+            body.drag = 0f;
+            body.angularDrag = 0.05f;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             body.constraints = RigidbodyConstraints.FreezeRotation;

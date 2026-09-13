@@ -18,6 +18,9 @@ EditorBuildSettings:
     path: Assets/Game/Scene/Level_2.unity
     guid: d67f039dacec2754ea0a5f96e7d72411
   - enabled: 1
+    path: Assets/Game/Scene/Jagernauts.unity
+    guid: 7a166b6bbf4c8054fb6fcf12a64e1dc5
+  - enabled: 1
     path: Assets/Game/Scene/Hub_2.unity
     guid: b1ace64ae34c9d041a57a22181620c98
   - enabled: 1

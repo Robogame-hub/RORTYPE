@@ -71,12 +71,12 @@ namespace RorType.Gameplay.Player
 
             body.useGravity = false;
             body.isKinematic = false;
-            body.linearDamping = 0f;
-            body.angularDamping = 0f;
+            body.drag = 0f;
+            body.angularDrag = 0f;
             body.constraints = RigidbodyConstraints.FreezeRotation;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.linearVelocity = flightDirection * speed;
+            body.velocity = flightDirection * speed;
             body.WakeUp();
 
             age = 0f;
@@ -168,7 +168,7 @@ namespace RorType.Gameplay.Player
 
             if (body != null)
             {
-                body.linearVelocity = Vector3.zero;
+                body.velocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
                 body.isKinematic = true;
             }

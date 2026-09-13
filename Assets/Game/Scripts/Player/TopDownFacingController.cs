@@ -1,3 +1,4 @@
+using System;
 using RorType.Gameplay.Combat;
 using UnityEngine;
 
@@ -13,6 +14,8 @@ namespace RorType.Gameplay.Player
         [Header("References")]
         [SerializeField] private Transform visualRoot;
         [SerializeField] private Transform feedbackTransform;
+        [SerializeField] private Animator characterAnimator;
+        [SerializeField] private Transform projectileMuzzle;
 
         [Header("Aiming")]
         [SerializeField, Min(0f)] private float turnSpeedDegrees = 720f;
@@ -26,6 +29,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.1f)] private float projectileMaxDistance = 20f;
         [SerializeField, Min(0.01f)] private float projectileRadius = 0.2f;
         [SerializeField, Min(0f)] private float projectileSpawnForwardOffset = 0.95f;
+        [SerializeField, Min(0f)] private float projectileMuzzleForwardOffset = 0.1f;
         [SerializeField] private Color projectileColor = new Color(0.86f, 0.14f, 0.14f);
         [SerializeField, Min(0.01f)] private float projectileStretchMultiplier = 1.65f;
         [SerializeField, Range(0.1f, 1f)] private float projectileSquashMultiplier = 0.74f;
@@ -33,30 +37,21 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float projectileDamage = 1f;
         [SerializeField, Min(0f)] private float projectileImpactImpulse = 1f;
 
-        [Header("Melee")]
-        [SerializeField] private bool automaticMelee = true;
-        [SerializeField, Min(0.01f)] private float meleeInterval = 0.16f;
-        [SerializeField, Min(0.01f)] private float meleePunchDuration = 0.18f;
-        [SerializeField, Min(0f)] private float meleeForwardReach = 0.72f;
-        [SerializeField, Min(0f)] private float meleeSideOffset = 0.42f;
-        [SerializeField, Min(0f)] private float meleeForwardOffset = 0.5f;
-        [SerializeField, Min(0f)] private float meleeHeightOffset = 0.12f;
-        [SerializeField, Min(0.01f)] private float meleeFistRadius = 0.2f;
-        [SerializeField] private Color meleeFistColor = new Color(0.86f, 0.14f, 0.14f);
-        [SerializeField, Min(0f)] private float meleeFistScaleBoost = 0.12f;
-        [SerializeField, Min(0f)] private float meleeFistForwardStretchBoost = 0.18f;
-        [SerializeField, Min(0f)] private float meleeDamage = 2f;
-        [SerializeField, Min(0f)] private float meleeImpactImpulse = 2f;
-        [SerializeField, Min(1)] private int meleeHitBufferSize = 12;
+        [Header("Character animation")]
+        [SerializeField] private bool animateCharacter = true;
+        [SerializeField] private string movementAnimationParameter = "MoveSpeed";
+        [SerializeField] private string fireAnimationWeightParameter = "FireWeight";
+        [SerializeField] private string locomotionAnimationState = "Locomotion";
+        [SerializeField] private string upperBodyAnimationLayer = "Upper Body";
+        [SerializeField] private string upperBodyFireBlendState = "Fire Overlay";
+        [SerializeField, Min(0f)] private float movementBlendDamping = 0.12f;
+        [SerializeField, Min(0.01f)] private float fireAnimationDuration = 0.42f;
 
         [Header("Bounce")]
         [SerializeField, Min(0.01f)] private float bounceDuration = 0.22f;
         [SerializeField, Min(0f)] private float bounceSideScale = 0.13f;
         [SerializeField, Min(0f)] private float bounceHeightScale = 0.2f;
         [SerializeField, Min(0.01f)] private float bounceScaleSharpness = 24f;
-
-        private const int MeleeFistCount = 2;
-        private const float MeleeImpactProgress = 0.28f;
 
         private TopDownPlayerMotor motor;
         private Rigidbody body;
@@ -65,18 +60,16 @@ namespace RorType.Gameplay.Player
         private CapsuleCollider capsuleCollider;
         private float shotCooldownTimer;
         private bool shotQueued;
-        private float meleeCooldownTimer;
-        private bool meleeQueued;
-        private int nextMeleeFistIndex;
         private Vector3 currentAimDirection = Vector3.forward;
         private Vector3 feedbackBaseLocalScale = Vector3.one;
         private float bounceTimer;
         private bool hasFeedbackBasePose;
-        private readonly Transform[] meleeFists = new Transform[MeleeFistCount];
-        private readonly float[] meleeFistPunchTimers = new float[MeleeFistCount];
-        private readonly bool[] meleeFistImpactApplied = new bool[MeleeFistCount];
-        private Collider[] meleeHitBuffer;
-        private Component[] meleeUniqueHitBuffer;
+        private int upperBodyAnimationLayerIndex = -1;
+        private int movementAnimationParameterHash;
+        private int fireAnimationWeightParameterHash;
+        private int locomotionAnimationFullPathHash;
+        private int upperBodyFireBlendFullPathHash;
+        private float fireAnimationTimer;
 
         private void Awake()
         {
@@ -85,10 +78,28 @@ namespace RorType.Gameplay.Player
             inputAdapter = GetComponent<TopDownInputAdapter>();
             resources = GetComponent<PlayerResourceController>();
             capsuleCollider = GetComponent<CapsuleCollider>();
+
+            characterAnimator = ResolveCharacterAnimator();
             visualRoot = ResolveVisualRoot();
+            projectileMuzzle = ResolveProjectileMuzzle();
+            CacheAnimationHashes();
+            if (characterAnimator != null)
+            {
+                characterAnimator.applyRootMotion = false;
+                characterAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
+                if (upperBodyAnimationLayerIndex >= 0)
+                {
+                    // Fire Blend Tree uses the masked locomotion pose at FireWeight 0
+                    // and blends toward Fire at FireWeight 1.
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                }
+
+                characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
+                characterAnimator.SetFloat(fireAnimationWeightParameterHash, 0f);
+            }
+
             CacheFeedbackBasePose();
-            EnsureMeleeFistsInitialized();
-            EnsureMeleeHitBuffers();
         }
 
         private void Update()
@@ -99,32 +110,21 @@ namespace RorType.Gameplay.Player
                 inputAdapter.ConsumeFirePressed();
             }
 
-            if (inputAdapter.MeleePressed)
-            {
-                meleeQueued = true;
-                inputAdapter.ConsumeMeleePressed();
-            }
-
             TickFacingAndAttacks(Time.deltaTime);
         }
 
         private void LateUpdate()
         {
+            // Read the motor after its FixedUpdate so the blend tree receives
+            // the real movement state, including acceleration and dash motion.
+            UpdateCharacterAnimation();
             bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
-            for (var i = 0; i < meleeFistPunchTimers.Length; i++)
-            {
-                TryResolveMeleeImpact(i);
-                meleeFistPunchTimers[i] = Mathf.Max(0f, meleeFistPunchTimers[i] - Time.deltaTime);
-            }
-
             UpdateFeedbackVisual(Time.deltaTime);
-            UpdateMeleeFistVisuals();
         }
 
         private void TickFacingAndAttacks(float deltaTime)
         {
             shotCooldownTimer = Mathf.Max(0f, shotCooldownTimer - deltaTime);
-            meleeCooldownTimer = Mathf.Max(0f, meleeCooldownTimer - deltaTime);
 
             var facingDirection = ResolveAimDirection();
             facingDirection.y = 0f;
@@ -150,7 +150,6 @@ namespace RorType.Gameplay.Player
             }
 
             TryShoot();
-            TryMeleeAttack();
         }
 
         private Vector3 ResolveAimDirection()
@@ -222,27 +221,13 @@ namespace RorType.Gameplay.Player
             }
 
             shotCooldownTimer = shotInterval;
+            TriggerFireAnimation();
             SpawnProjectile();
-        }
-
-        private void TryMeleeAttack()
-        {
-            var shouldPunch = meleeQueued || (automaticMelee && inputAdapter.MeleeHeld);
-            if (!shouldPunch || meleeCooldownTimer > 0f)
-            {
-                return;
-            }
-
-            meleeQueued = false;
-            meleeCooldownTimer = meleeInterval;
-            TriggerMeleePunch(nextMeleeFistIndex);
-            nextMeleeFistIndex = (nextMeleeFistIndex + 1) % MeleeFistCount;
         }
 
         private void SpawnProjectile()
         {
-            var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
-            spawnOrigin += currentAimDirection * projectileSpawnForwardOffset;
+            var spawnOrigin = ResolveProjectileSpawnOrigin();
             var effectiveProjectileLifetime = ResolveProjectileLifetime(projectileSpeed, projectileLifetime, projectileMaxDistance);
 
             var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -254,6 +239,14 @@ namespace RorType.Gameplay.Player
 
             var projectileCollider = projectile.GetComponent<SphereCollider>();
             var projectileRenderer = projectile.GetComponent<Renderer>();
+
+            // The player's bolt still uses trigger callbacks for hit detection,
+            // but must never physically push its owner when it leaves the muzzle.
+            if (projectileCollider != null)
+            {
+                projectileCollider.isTrigger = true;
+            }
+
             projectile.AddComponent<Rigidbody>();
             var projectileSphere = projectile.AddComponent<TopDownProjectileSphere>();
 
@@ -279,229 +272,109 @@ namespace RorType.Gameplay.Player
             TriggerBounce();
         }
 
-        private void TriggerMeleePunch(int fistIndex)
+        private Vector3 ResolveProjectileSpawnOrigin()
         {
-            EnsureMeleeFistsInitialized();
-            if (fistIndex < 0 || fistIndex >= meleeFists.Length || meleeFists[fistIndex] == null)
+            if (projectileMuzzle != null)
+            {
+                return projectileMuzzle.position + (currentAimDirection * projectileMuzzleForwardOffset);
+            }
+
+            var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            return spawnOrigin + (currentAimDirection * projectileSpawnForwardOffset);
+        }
+
+        private void TriggerFireAnimation()
+        {
+            if (!animateCharacter || characterAnimator == null)
             {
                 return;
             }
 
-            meleeFistPunchTimers[fistIndex] = meleePunchDuration;
-            meleeFistImpactApplied[fistIndex] = false;
-            TriggerBounce();
+            fireAnimationTimer = fireAnimationDuration;
+            characterAnimator.SetFloat(fireAnimationWeightParameterHash, 1f);
+
+            if (upperBodyAnimationLayerIndex >= 0)
+            {
+                // Restart the upper-body blend tree so every shot starts at the
+                // beginning of Fire while the base locomotion keeps running.
+                characterAnimator.Play(
+                    upperBodyFireBlendFullPathHash,
+                    upperBodyAnimationLayerIndex,
+                    0f);
+            }
         }
 
-        private void TryResolveMeleeImpact(int fistIndex)
+        private void UpdateCharacterAnimation()
         {
-            if (fistIndex < 0 || fistIndex >= meleeFistPunchTimers.Length || meleeFistImpactApplied[fistIndex])
+            if (!animateCharacter || characterAnimator == null || !characterAnimator.isActiveAndEnabled)
             {
                 return;
             }
 
-            if (meleePunchDuration <= 0f || meleeFistPunchTimers[fistIndex] <= 0f)
+            var isMoving = inputAdapter != null && inputAdapter.HasMovementInput;
+            if (!isMoving && motor != null)
             {
-                return;
+                // Use the motor as a second source so animation cannot miss a
+                // movement frame because Update/FixedUpdate ran in another order.
+                isMoving = motor.CurrentSpeed > 0.05f || motor.IsDashing;
             }
 
-            var progress = 1f - (meleeFistPunchTimers[fistIndex] / meleePunchDuration);
-            if (progress < MeleeImpactProgress)
-            {
-                return;
-            }
+            var targetMoveSpeed = ResolveMovementAnimationValue(isMoving);
+            characterAnimator.SetFloat(
+                movementAnimationParameterHash,
+                targetMoveSpeed,
+                movementBlendDamping,
+                Time.deltaTime);
 
-            meleeFistImpactApplied[fistIndex] = true;
-            ApplyMeleeHit(fistIndex);
+            var targetFireWeight = fireAnimationTimer > 0f ? 1f : 0f;
+            characterAnimator.SetFloat(
+                fireAnimationWeightParameterHash,
+                targetFireWeight,
+                0.06f,
+                Time.deltaTime);
+            fireAnimationTimer = Mathf.Max(0f, fireAnimationTimer - Time.deltaTime);
+
         }
 
-        private void UpdateMeleeFistVisuals()
+        private float ResolveMovementAnimationValue(bool isMoving)
         {
-            EnsureMeleeFistsInitialized();
-            for (var i = 0; i < meleeFists.Length; i++)
+            if (!isMoving)
             {
-                var fist = meleeFists[i];
-                if (fist == null)
-                {
-                    continue;
-                }
-
-                var basePosition = GetMeleeBaseLocalPosition(i);
-                var baseScale = Vector3.one * (meleeFistRadius * 2f);
-                var punchAmount = 0f;
-                if (meleePunchDuration > 0f && meleeFistPunchTimers[i] > 0f)
-                {
-                    var progress = 1f - (meleeFistPunchTimers[i] / meleePunchDuration);
-                    punchAmount = EvaluatePunchAmount(progress);
-                }
-
-                fist.localPosition = basePosition + (Vector3.forward * (meleeForwardReach * punchAmount));
-                fist.localRotation = Quaternion.identity;
-                fist.localScale = new Vector3(
-                    baseScale.x * (1f + (meleeFistScaleBoost * punchAmount)),
-                    baseScale.y * (1f + (meleeFistScaleBoost * punchAmount)),
-                    baseScale.z * (1f + ((meleeFistScaleBoost + meleeFistForwardStretchBoost) * punchAmount)));
+                return 0f;
             }
+
+            var movementDirection = motor != null
+                ? motor.CurrentWorldMoveDirection
+                : Vector3.zero;
+            movementDirection.y = 0f;
+
+            // A negative value selects the backwards-running branch of the
+            // locomotion blend tree whenever movement opposes cursor aim.
+            var directionSign = movementDirection.sqrMagnitude > 0.0001f
+                && Vector3.Dot(movementDirection.normalized, currentAimDirection) < 0f
+                    ? -1f
+                    : 1f;
+
+            if (motor == null || motor.WalkSpeed <= 0.01f)
+            {
+                return directionSign;
+            }
+
+            var maximumSpeedRatio = Mathf.Max(1f, motor.SprintSpeed / motor.WalkSpeed);
+            var actualSpeedRatio = Mathf.Clamp(
+                motor.CurrentSpeed / motor.WalkSpeed,
+                0f,
+                maximumSpeedRatio);
+
+            return directionSign * actualSpeedRatio;
         }
 
-        private void EnsureMeleeFistsInitialized()
+        private void CacheAnimationHashes()
         {
-            var parent = ResolveCombatVisualParent();
-            for (var i = 0; i < meleeFists.Length; i++)
-            {
-                if (meleeFists[i] != null && meleeFists[i].parent == parent)
-                {
-                    continue;
-                }
-
-                if (meleeFists[i] != null)
-                {
-                    Destroy(meleeFists[i].gameObject);
-                }
-
-                meleeFists[i] = CreateMeleeFist(parent, i);
-            }
-        }
-
-        private Transform CreateMeleeFist(Transform parent, int fistIndex)
-        {
-            var fist = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            fist.name = fistIndex == 0 ? "LeftMeleeFist" : "RightMeleeFist";
-            fist.transform.SetParent(parent, false);
-
-            var fistCollider = fist.GetComponent<Collider>();
-            if (fistCollider != null)
-            {
-                fistCollider.enabled = false;
-                Destroy(fistCollider);
-            }
-
-            var fistRenderer = fist.GetComponent<Renderer>();
-            if (fistRenderer != null)
-            {
-                RuntimeRendererUtility.SetColor(fistRenderer, meleeFistColor);
-            }
-
-            return fist.transform;
-        }
-
-        private void ApplyMeleeHit(int fistIndex)
-        {
-            EnsureMeleeHitBuffers();
-            var attackPoint = GetMeleeAttackWorldPosition(fistIndex);
-            var hitCount = Physics.OverlapSphereNonAlloc(
-                attackPoint,
-                meleeFistRadius,
-                meleeHitBuffer,
-                Physics.AllLayers,
-                QueryTriggerInteraction.Ignore);
-
-            var uniqueHitCount = 0;
-            for (var i = 0; i < hitCount; i++)
-            {
-                var hitCollider = meleeHitBuffer[i];
-                if (hitCollider == null || hitCollider.transform.root == transform.root)
-                {
-                    continue;
-                }
-
-                if (!CombatUtility.TryGetDamageable(hitCollider, out var damageable, out var damageableComponent))
-                {
-                    continue;
-                }
-
-                if (!damageable.IsAlive || damageable.Team == CombatTeam.Player)
-                {
-                    continue;
-                }
-
-                var alreadyHit = false;
-                for (var uniqueIndex = 0; uniqueIndex < uniqueHitCount; uniqueIndex++)
-                {
-                    if (meleeUniqueHitBuffer[uniqueIndex] == damageableComponent)
-                    {
-                        alreadyHit = true;
-                        break;
-                    }
-                }
-
-                if (alreadyHit)
-                {
-                    continue;
-                }
-
-                meleeUniqueHitBuffer[uniqueHitCount] = damageableComponent;
-                uniqueHitCount++;
-
-                damageable.ReceiveHit(new CombatHitInfo(
-                    GetModifiedDamage(meleeDamage),
-                    attackPoint,
-                    currentAimDirection,
-                    meleeImpactImpulse,
-                    gameObject,
-                    CombatTeam.Player));
-            }
-
-            for (var i = 0; i < hitCount; i++)
-            {
-                meleeHitBuffer[i] = null;
-            }
-
-            for (var i = 0; i < uniqueHitCount; i++)
-            {
-                meleeUniqueHitBuffer[i] = null;
-            }
-        }
-
-        private Vector3 GetMeleeBaseLocalPosition(int fistIndex)
-        {
-            var side = fistIndex == 0 ? -meleeSideOffset : meleeSideOffset;
-            return new Vector3(side, meleeHeightOffset, meleeForwardOffset);
-        }
-
-        private Vector3 GetMeleeAttackWorldPosition(int fistIndex)
-        {
-            var parent = ResolveCombatVisualParent();
-            var localPoint = GetMeleeBaseLocalPosition(fistIndex) + (Vector3.forward * meleeForwardReach);
-            return parent.TransformPoint(localPoint);
-        }
-
-        private float EvaluatePunchAmount(float progress)
-        {
-            progress = Mathf.Clamp01(progress);
-            if (progress < 0.28f)
-            {
-                var extendPhase = progress / 0.28f;
-                return Mathf.Sin(extendPhase * Mathf.PI * 0.5f);
-            }
-
-            var retractPhase = (progress - 0.28f) / 0.72f;
-            return Mathf.Cos(retractPhase * Mathf.PI * 0.5f);
-        }
-
-        private void TriggerBounce()
-        {
-            bounceTimer = bounceDuration;
-        }
-
-        private float GetModifiedDamage(float baseDamage)
-        {
-            if (resources == null)
-            {
-                resources = GetComponent<PlayerResourceController>();
-            }
-
-            return Mathf.Max(0f, baseDamage) * (resources != null ? resources.DamageMultiplier : 1f);
-        }
-
-        private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)
-        {
-            var effectiveLifetime = Mathf.Max(0.01f, configuredLifetime);
-            if (speed <= 0f || maxDistance <= 0f)
-            {
-                return effectiveLifetime;
-            }
-
-            return Mathf.Min(effectiveLifetime, maxDistance / speed);
+            movementAnimationParameterHash = Animator.StringToHash(movementAnimationParameter);
+            fireAnimationWeightParameterHash = Animator.StringToHash(fireAnimationWeightParameter);
+            locomotionAnimationFullPathHash = Animator.StringToHash($"Base Layer.{locomotionAnimationState}");
+            upperBodyFireBlendFullPathHash = Animator.StringToHash($"{upperBodyAnimationLayer}.{upperBodyFireBlendState}");
         }
 
         private void IgnorePlayerCollisions(Collider projectileCollider)
@@ -529,24 +402,55 @@ namespace RorType.Gameplay.Player
             bounceTimer = 0f;
             shotCooldownTimer = 0f;
             shotQueued = false;
-            meleeCooldownTimer = 0f;
-            meleeQueued = false;
-            nextMeleeFistIndex = 0;
-            for (var i = 0; i < meleeFistPunchTimers.Length; i++)
+
+            if (characterAnimator != null)
             {
-                meleeFistPunchTimers[i] = 0f;
-                meleeFistImpactApplied[i] = false;
+                characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
+                characterAnimator.SetFloat(fireAnimationWeightParameterHash, 0f);
+                fireAnimationTimer = 0f;
+
+                characterAnimator.Play(locomotionAnimationFullPathHash, 0, 0f);
+
+                if (upperBodyAnimationLayerIndex >= 0)
+                {
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                    characterAnimator.Play(upperBodyFireBlendFullPathHash, upperBodyAnimationLayerIndex, 0f);
+                }
             }
 
             var targetTransform = ResolveFeedbackTransform();
-
             if (!hasFeedbackBasePose || targetTransform == null)
             {
                 return;
             }
 
             targetTransform.localScale = feedbackBaseLocalScale;
-            UpdateMeleeFistVisuals();
+        }
+
+        private void TriggerBounce()
+        {
+            bounceTimer = bounceDuration;
+        }
+
+        private float GetModifiedDamage(float baseDamage)
+        {
+            if (resources == null)
+            {
+                resources = GetComponent<PlayerResourceController>();
+            }
+
+            return Mathf.Max(0f, baseDamage) * (resources != null ? resources.DamageMultiplier : 1f);
+        }
+
+        private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)
+        {
+            var effectiveLifetime = Mathf.Max(0.01f, configuredLifetime);
+            if (speed <= 0f || maxDistance <= 0f)
+            {
+                return effectiveLifetime;
+            }
+
+            return Mathf.Min(effectiveLifetime, maxDistance / speed);
         }
 
         private void UpdateFeedbackVisual(float deltaTime)
@@ -608,16 +512,6 @@ namespace RorType.Gameplay.Player
             hasFeedbackBasePose = true;
         }
 
-        private void EnsureMeleeHitBuffers()
-        {
-            var bufferSize = Mathf.Max(1, meleeHitBufferSize);
-            if (meleeHitBuffer == null || meleeHitBuffer.Length != bufferSize)
-            {
-                meleeHitBuffer = new Collider[bufferSize];
-                meleeUniqueHitBuffer = new Component[bufferSize];
-            }
-        }
-
         private Transform ResolveFeedbackTransform()
         {
             if (feedbackTransform != null)
@@ -633,14 +527,14 @@ namespace RorType.Gameplay.Player
             return transform;
         }
 
-        private Transform ResolveCombatVisualParent()
+        private Animator ResolveCharacterAnimator()
         {
-            if (visualRoot != null)
+            if (characterAnimator != null)
             {
-                return visualRoot;
+                return characterAnimator;
             }
 
-            return transform;
+            return GetComponentInChildren<Animator>(true);
         }
 
         private Transform ResolveVisualRoot()
@@ -650,38 +544,51 @@ namespace RorType.Gameplay.Player
                 return visualRoot;
             }
 
-            var childRenderer = GetComponentInChildren<Renderer>();
+            if (characterAnimator != null && characterAnimator.transform != transform)
+            {
+                return characterAnimator.transform;
+            }
+
+            var childRenderer = GetComponentInChildren<Renderer>(true);
             if (childRenderer != null && childRenderer.transform != transform)
             {
                 return childRenderer.transform;
             }
 
-            var rootRenderer = GetComponent<MeshRenderer>();
-            var rootMeshFilter = GetComponent<MeshFilter>();
-            if (rootRenderer != null && rootMeshFilter != null && rootMeshFilter.sharedMesh != null)
+            return null;
+        }
+
+        private Transform ResolveProjectileMuzzle()
+        {
+            if (projectileMuzzle != null)
             {
-                var runtimeVisual = transform.Find("RuntimeVisual");
-                if (runtimeVisual == null)
-                {
-                    var runtimeVisualObject = new GameObject("RuntimeVisual");
-                    runtimeVisualObject.transform.SetParent(transform, false);
-                    runtimeVisualObject.transform.localPosition = Vector3.zero;
-                    runtimeVisualObject.transform.localRotation = Quaternion.identity;
-                    runtimeVisualObject.transform.localScale = Vector3.one;
-
-                    var runtimeFilter = runtimeVisualObject.AddComponent<MeshFilter>();
-                    runtimeFilter.sharedMesh = rootMeshFilter.sharedMesh;
-
-                    var runtimeRenderer = runtimeVisualObject.AddComponent<MeshRenderer>();
-                    runtimeRenderer.sharedMaterials = rootRenderer.sharedMaterials;
-                    rootRenderer.enabled = false;
-                    runtimeVisual = runtimeVisualObject.transform;
-                }
-
-                return runtimeVisual;
+                return projectileMuzzle;
             }
 
-            return visualRoot;
+            var transforms = GetComponentsInChildren<Transform>(true);
+            var preferredNames = new[]
+            {
+                "Muzzle",
+                "MuzzlePoint",
+                "FirePoint",
+                "BarrelEnd",
+                "Barrel",
+                "Bolter",
+                "BoltGun"
+            };
+
+            for (var nameIndex = 0; nameIndex < preferredNames.Length; nameIndex++)
+            {
+                for (var transformIndex = 0; transformIndex < transforms.Length; transformIndex++)
+                {
+                    if (string.Equals(transforms[transformIndex].name, preferredNames[nameIndex], StringComparison.OrdinalIgnoreCase))
+                    {
+                        return transforms[transformIndex];
+                    }
+                }
+            }
+
+            return null;
         }
     }
 }

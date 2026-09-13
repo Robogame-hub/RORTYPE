@@ -161,8 +161,8 @@ namespace RorType.Gameplay.AI
 
             body.useGravity = false;
             body.isKinematic = true;
-            body.linearDamping = 0f;
-            body.angularDamping = 0f;
+            body.drag = 0f;
+            body.angularDrag = 0f;
             body.constraints = RigidbodyConstraints.FreezeRotation;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;

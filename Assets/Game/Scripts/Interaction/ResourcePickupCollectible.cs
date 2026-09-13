@@ -310,7 +310,7 @@ namespace RorType.Gameplay.Interaction
             body.useGravity = true;
             body.isKinematic = false;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-            body.linearVelocity = launchVelocity;
+            body.velocity = launchVelocity;
             body.angularVelocity = Random.insideUnitSphere * 4f;
             basePosition = transform.position;
             age = 0f;

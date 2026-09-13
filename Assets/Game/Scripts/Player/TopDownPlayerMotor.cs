@@ -106,7 +106,10 @@ namespace RorType.Gameplay.Player
         private int dashImpactCount;
 
         public Vector3 LastWorldMoveDirection { get; private set; } = Vector3.forward;
+        public Vector3 CurrentWorldMoveDirection { get; private set; }
         public float CurrentSpeed { get; private set; }
+        public float WalkSpeed => walkSpeed;
+        public float SprintSpeed => sprintSpeed;
         public bool IsGrounded => isGroundedForLocomotion;
         public bool IsSprinting { get; private set; }
         public bool IsDashing => dashRemainingDistance > 0f;
@@ -222,16 +225,22 @@ namespace RorType.Gameplay.Player
                 planarVelocity = Time.fixedDeltaTime > 0f
                     ? resolvedPlanarDelta / Time.fixedDeltaTime
                     : Vector3.zero;
-                body.linearVelocity = Vector3.zero;
+                body.velocity = Vector3.zero;
                 body.MovePosition(targetPosition);
             }
             else
             {
                 verticalVelocity += -extraFallGravity * Time.fixedDeltaTime;
-                body.linearVelocity = new Vector3(combinedPlanarVelocity.x, verticalVelocity, combinedPlanarVelocity.z);
+                body.velocity = new Vector3(combinedPlanarVelocity.x, verticalVelocity, combinedPlanarVelocity.z);
             }
 
-            CurrentSpeed = combinedPlanarVelocity.magnitude;
+            var resolvedPlanarVelocity = useGroundSnap
+                ? planarVelocity
+                : new Vector3(combinedPlanarVelocity.x, 0f, combinedPlanarVelocity.z);
+            CurrentSpeed = resolvedPlanarVelocity.magnitude;
+            CurrentWorldMoveDirection = CurrentSpeed > 0.001f
+                ? resolvedPlanarVelocity / CurrentSpeed
+                : Vector3.zero;
         }
 
         public void SetMovementReference(Transform reference)
@@ -242,6 +251,8 @@ namespace RorType.Gameplay.Player
         public void ResetMotionState()
         {
             planarVelocity = Vector3.zero;
+            CurrentWorldMoveDirection = Vector3.zero;
+            CurrentSpeed = 0f;
             verticalVelocity = 0f;
             jumpBufferTimer = 0f;
             coyoteTimer = 0f;
@@ -674,7 +685,7 @@ namespace RorType.Gameplay.Player
             planarVelocity = Vector3.zero;
             externalPlanarVelocity = Vector3.zero;
             verticalVelocity = 0f;
-            body.linearVelocity = Vector3.zero;
+            body.velocity = Vector3.zero;
             body.WakeUp();
         }
 
@@ -930,11 +941,14 @@ namespace RorType.Gameplay.Player
                 targetPosition = ResolvePenetrationFreePosition(targetPosition);
             }
 
-            body.linearVelocity = Vector3.zero;
+            body.velocity = Vector3.zero;
             body.MovePosition(targetPosition);
 
             planarVelocity = Vector3.zero;
             CurrentSpeed = actualPlanarStep.magnitude / Mathf.Max(0.0001f, deltaTime);
+            CurrentWorldMoveDirection = CurrentSpeed > 0.001f
+                ? actualPlanarStep.normalized
+                : Vector3.zero;
         }
 
         private float GetDistanceControlledGroundSampleDistance(Vector3 plannedPlanarStep)
@@ -1017,38 +1031,13 @@ namespace RorType.Gameplay.Player
                 return visualRoot;
             }
 
-            var childRenderer = GetComponentInChildren<Renderer>();
-            if (childRenderer != null && childRenderer.transform != transform)
+            var characterAnimator = GetComponentInChildren<Animator>(true);
+            if (characterAnimator != null && characterAnimator.transform != transform)
             {
-                return childRenderer.transform;
+                return characterAnimator.transform;
             }
 
-            var rootRenderer = GetComponent<MeshRenderer>();
-            var rootMeshFilter = GetComponent<MeshFilter>();
-            if (rootRenderer != null && rootMeshFilter != null && rootMeshFilter.sharedMesh != null)
-            {
-                var runtimeVisual = transform.Find("RuntimeVisual");
-                if (runtimeVisual == null)
-                {
-                    var runtimeVisualObject = new GameObject("RuntimeVisual");
-                    runtimeVisualObject.transform.SetParent(transform, false);
-                    runtimeVisualObject.transform.localPosition = Vector3.zero;
-                    runtimeVisualObject.transform.localRotation = Quaternion.identity;
-                    runtimeVisualObject.transform.localScale = Vector3.one;
-
-                    var runtimeFilter = runtimeVisualObject.AddComponent<MeshFilter>();
-                    runtimeFilter.sharedMesh = rootMeshFilter.sharedMesh;
-
-                    var runtimeRenderer = runtimeVisualObject.AddComponent<MeshRenderer>();
-                    runtimeRenderer.sharedMaterials = rootRenderer.sharedMaterials;
-                    runtimeVisual = runtimeVisualObject.transform;
-                }
-
-                rootRenderer.enabled = false;
-                return runtimeVisual;
-            }
-
-            return visualRoot;
+            return transform.Find("Visual");
         }
 
         private void CacheVisualBasePose()

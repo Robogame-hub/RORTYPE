@@ -58,11 +58,6 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -84,11 +79,9 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &1631855103260934818
 GameObject:
@@ -103,7 +96,6 @@ GameObject:
   - component: {fileID: 5816590518377428233}
   - component: {fileID: 130388523340314993}
   - component: {fileID: 8645658412658671139}
-  - component: {fileID: 901001001001001008}
   m_Layer: 0
   m_Name: EnemyExploder
   m_TagString: Untagged
@@ -157,10 +149,10 @@ Rigidbody:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1631855103260934818}
-  serializedVersion: 5
+  serializedVersion: 4
   m_Mass: 55
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_Drag: 0
+  m_AngularDrag: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -187,8 +179,8 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 6.8
-  m_Acceleration: 27.2
+  m_Speed: 13.6
+  m_Acceleration: 54.4
   avoidancePriority: 50
   m_AngularSpeed: 540
   m_StoppingDistance: 0
@@ -210,7 +202,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 22972b5d23bdd3f4cbbe252e6b058f00, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.AI.EnemyCapsuleController
+  m_EditorClassIdentifier: 
   archetype: 2
   visualRoot: {fileID: 3457898340013891010}
   visualRenderer: {fileID: 5444568314081125494}
@@ -256,7 +248,7 @@ MonoBehaviour:
   explodeWarningFlashCount: 3
   explodeWarningFlashInterval: 0.11
   explodeVisualLifetime: 0.16
-  explodeVisualRadius: 2.6
+  explodeVisualRadius: 5.2
   explodeEffectRadius: 3
   explodeDamageRadius: 2
   explodeDamage: 30
@@ -270,22 +262,14 @@ MonoBehaviour:
   hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
   hitFlashCount: 3
   hitFlashInterval: 0.05
---- !u!114 &901001001001001008
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1631855103260934818}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
-  trackedTransform: {fileID: 2636921008625549500}
-  iconGroup: 1
-  markerShape: 0
-  iconColor: {r: 0.95, g: 0.2, b: 0.2, a: 1}
-  markerSize: 14
-  rotateWithWorldYaw: 0
-  worldOffset: {x: 0, y: 0, z: 0}
+  minResourceDrops: 1
+  maxResourceDrops: 3
+  moneyPickupPrefab: {fileID: 0}
+  ammoPickupPrefab: {fileID: 0}
+  healthPickupPrefab: {fileID: 0}
+  moneyPerPickup: 10
+  ammoPerPickup: 10
+  healthPerPickup: 150
+  healthDropChance: 0.2
+  shooterAmmoDropChance: 0.45
+  dropLaunchSpeed: 3.2

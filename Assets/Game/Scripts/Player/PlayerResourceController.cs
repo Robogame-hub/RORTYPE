@@ -422,10 +422,7 @@ namespace RorType.Gameplay.Player
 
         private static bool IsTransientCombatRenderer(Renderer renderer)
         {
-            var rendererName = renderer.name;
-            return PlayerOcclusionGhost.IsGhostOverlayRenderer(renderer)
-                || string.Equals(rendererName, "LeftMeleeFist", StringComparison.Ordinal)
-                || string.Equals(rendererName, "RightMeleeFist", StringComparison.Ordinal);
+            return PlayerOcclusionGhost.IsGhostOverlayRenderer(renderer);
         }
 
         private void EnsureOcclusionGhost()

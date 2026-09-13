@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 2193844642569082842}
   - component: {fileID: 7598556684385139731}
   - component: {fileID: 8190394492271339124}
-  - component: {fileID: 901001001001001007}
   m_Layer: 0
   m_Name: EnemyMelee
   m_TagString: Untagged
@@ -67,10 +66,10 @@ Rigidbody:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 3615722631763545253}
-  serializedVersion: 5
+  serializedVersion: 4
   m_Mass: 55
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_Drag: 0
+  m_AngularDrag: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -97,8 +96,8 @@ NavMeshAgent:
   m_Enabled: 1
   m_AgentTypeID: 0
   m_Radius: 0.5
-  m_Speed: 6.1
-  m_Acceleration: 24.4
+  m_Speed: 10.2
+  m_Acceleration: 40.8
   avoidancePriority: 50
   m_AngularSpeed: 540
   m_StoppingDistance: 0
@@ -120,7 +119,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 22972b5d23bdd3f4cbbe252e6b058f00, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.AI.EnemyCapsuleController
+  m_EditorClassIdentifier: 
   archetype: 1
   visualRoot: {fileID: 4249723981146655196}
   visualRenderer: {fileID: 4135133901957723846}
@@ -166,7 +165,7 @@ MonoBehaviour:
   explodeWarningFlashCount: 3
   explodeWarningFlashInterval: 0.11
   explodeVisualLifetime: 0.16
-  explodeVisualRadius: 2.6
+  explodeVisualRadius: 5.2
   explodeEffectRadius: 3
   explodeDamageRadius: 2
   explodeDamage: 30
@@ -180,25 +179,17 @@ MonoBehaviour:
   hitFlashColor: {r: 1, g: 1, b: 1, a: 1}
   hitFlashCount: 3
   hitFlashInterval: 0.05
---- !u!114 &901001001001001007
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3615722631763545253}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: af2f0f22244b460e9aa8925438a6b27f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.UI.MinimapTrackable
-  trackedTransform: {fileID: 8120257798234494895}
-  iconGroup: 1
-  markerShape: 0
-  iconColor: {r: 0.95, g: 0.2, b: 0.2, a: 1}
-  markerSize: 14
-  rotateWithWorldYaw: 0
-  worldOffset: {x: 0, y: 0, z: 0}
+  minResourceDrops: 1
+  maxResourceDrops: 3
+  moneyPickupPrefab: {fileID: 0}
+  ammoPickupPrefab: {fileID: 0}
+  healthPickupPrefab: {fileID: 0}
+  moneyPerPickup: 10
+  ammoPerPickup: 10
+  healthPerPickup: 150
+  healthDropChance: 0.2
+  shooterAmmoDropChance: 0.45
+  dropLaunchSpeed: 3.2
 --- !u!1 &7208630907709927234
 GameObject:
   m_ObjectHideFlags: 0
@@ -257,11 +248,6 @@ MeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
@@ -283,9 +269,7 @@ MeshRenderer:
   m_AutoUVMaxDistance: 0.5
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 0
-  m_MaskInteraction: 0
   m_AdditionalVertexStreams: {fileID: 0}

@@ -29,10 +29,11 @@
 
 ## Техническая база
 
-- Движок: Unity `6000.3.10f1`
+- Движок: Unity `2022.3.23f1` (актуальное значение из `ProjectSettings/ProjectVersion.txt`)
 - Из используемых пакетов явно подключены:
   - `com.unity.probuilder`
-  - `com.unity.multiplayer.center`
+  - `com.unity.render-pipelines.universal` `14.0.10`
+  - `com.unity.ai.navigation`
   - стандартные модули Unity
 
 ## Структура репозитория
@@ -585,7 +586,7 @@ Portal travel is now implemented as a real runtime scene-travel slice and no lon
 ## Current interaction/resource implementation on 2026-06-10
 
 - `Assets/Game/Scripts/Player/PlayerResourceController.cs` stores player ammo and stamina. The current accepted defaults are starting ammo `100`, max ammo `999`, stamina `100`, sprint drain `10/sec`, stamina regen `35/sec` after `0.45 sec`.
-- `TopDownFacingController` now spends `1` ammo before spawning a projectile. If ammo is `0`, ranged shooting does not fire; melee attacks still work.
+- `TopDownFacingController` spends `1` ammo before spawning a projectile. If ammo is `0`, shooting is blocked; the player has no melee attack.
 - `TopDownPlayerMotor` now has `2` dash charges and recovers one charge every `5 sec`. Sprinting consumes stamina through `PlayerResourceController`.
 - `Assets/Game/Scripts/UI/PlayerStatusUiRuntime.cs` creates a runtime bottom-right HUD showing ammo, two dash rectangles, and stamina.
 - `Assets/Game/Scripts/Interaction/WorldInteractable.cs` adds portal-style proximity interaction for non-portal objects, using the existing `ScenePortalInteractionController` and `PortalUiRuntime` prompt.
@@ -698,7 +699,7 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 ## Current player hit feedback and fall threshold on 2026-06-15
 
 - `PlayerResourceController.ReceiveHit` deducts shield/health, spawns the existing floating shield/HP damage text, and now also flashes the player's visual renderers white after any accepted non-player hit.
-- Player hit flashing excludes runtime melee fist renderers so attack visuals keep their configured red color after the flash.
+- Player hit flashing excludes only the `PlayerOcclusionGhost` overlay renderers; the player visual is now the authored `CHARACTER` model.
 - `PlayerRespawnController.fallDistance` is now `5m`; the value is serialized on `TopDownPlayer.prefab` and on scene-local players in `Level_1`, `Level_2`, `Hub_1`, and `PlayerMovementTest`.
 
 ## Current player occlusion ghost implementation on 2026-06-15
@@ -708,9 +709,42 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 - The ghost overlay is created as duplicate runtime renderers on the player's visual meshes, not by replacing the normal player material. This keeps the normal red player visual, hit flash, and combat feedback intact.
 - `PlayerResourceController` auto-adds `PlayerOcclusionGhost` so scene-local players in existing gameplay scenes receive the behavior without manual scene edits.
 
+## Current CHARACTER player integration on 2026-09-13
+
+- `Assets/Game/DESANTGAME/PREFAB/CHARACTER.prefab` is the authored player visual. It contains the `CHARACTER` model with the user-attached `Bolter` and `Shield` prefab instances on their intended bones.
+- `TopDownPlayer.prefab` and the manually authored players in `PlayerMovementTest`, `Hub_1`, `Level_1`, and `Level_2` use the CHARACTER prefab instead of the old sphere visual. The old sphere renderers are disabled.
+- `TopDownFacingController` aims the visual at the mouse cursor on the horizontal gameplay plane. Right-mouse melee input and runtime fist creation/hit detection were removed.
+- Player projectiles spawn from the resolved bolter muzzle hierarchy (`Muzzle`, `MuzzlePoint`, `FirePoint`, `BarrelEnd`, `Barrel`, `Bolter`, or `BoltGun`), with a fallback to the old body offset if no matching transform exists. Projectile travel still follows the cursor aim direction.
+- `Assets/Game/DESANTGAME/DESIGN/Animation/New Animator Controller.controller` uses a 1D `Locomotion Blend Tree` on the base layer, with Idle at `MoveSpeed=0` and Run at `MoveSpeed=1`. The masked `Upper Body` layer has a second 1D `Fire Blend Tree` driven by `FireWeight`, with the masked Locomotion tree at `0` and Fire at `1`.
+
 ## Current elevator platform implementation on 2026-06-15
 
 - `Assets/Game/Scripts/Interaction/ElevatorPlatform.cs` implements a pressure-triggered moving lift for manually authored scene placement.
 - `Assets/Game/Prefabs/PointOfInterest/ElevatorPlatform.prefab` contains a yellow solid deck, a red/green pressure button trigger on the deck, a point light indicator, and a kinematic Rigidbody root.
 - Default behavior matches the accepted prototype requirement: stepping onto the platform button raises the elevator by inspector-configured `liftHeightMeters` (`5m` by default); leaving the platform trigger starts a `3s` return delay; after the delay the elevator moves back down.
 - While the player remains inside the pressure trigger, the elevator applies its movement delta to the player's Rigidbody root, keeping the current `TopDownPlayerMotor` riding with the moving platform.
+
+## URP and camera configuration on 2026-09-13
+
+- URP `14.0.10`, bundled with Unity `2022.3.23f1`, is declared in the package manifest and lock file. `Assets/Game/Rendering/RortypeURP.asset` is assigned in Graphics Settings; all existing quality levels inherit it because their pipeline overrides are empty.
+- The authored Forward Renderer enables HDR, 2x MSAA, main/additional light shadows, a 60m shadow distance, two cascades, and SRP batching. Global URP settings are stored beside the pipeline asset.
+- Standard materials under `Assets` are migrated to URP Lit, preserving textures, tint, metallic/smoothness and transparent surface modes. The two missing Built-in Shader Graph references are replaced with URP Unlit. ProBuilder geometry uses the package's URP vertex-color material. `PlayerGhostFresnel.shader` uses URP HLSL with its existing through-wall blending.
+- `Level_1` camera explicitly targets the active `TopDownPlayer` gameplay root containing the CHARACTER visual. `TopDownCameraRig` also reacquires an active player if its target is missing/disabled, resolves a character-child target through its parent motor, and follows after motor visual smoothing.
+- `TopDownPlayerMotor` resolves the CHARACTER Animator root instead of creating a sphere or following an animated mesh/bone. `PlayerResourceController` requires `using System;` for its `Action` events.
+
+## Layered player animation and world post-processing on 2026-09-13
+
+- CHARACTER locomotion uses the Animator base layer's 1D `Locomotion Blend Tree`. Fire uses a second 1D blend tree on the override `Upper Body` layer, constrained by `Assets/Game/DESANTGAME/DESIGN/Animation/CharacterUpperBody.mask` to the Generic-rig torso, head, arms, and fingers; its zero-weight child is the same masked locomotion tree.
+- `TopDownFacingController` drives signed `MoveSpeed` from resolved planar velocity. Movement opposite cursor aim uses negative thresholds and therefore plays the Run clip backwards; forward movement uses positive thresholds. The tree scales from `1.6x` at walk speed to `2.4x` at sprint speed, while the masked Fire tree continues blending independently over locomotion.
+- Player bolts use trigger-only colliders, so their dynamic Rigidbody cannot transfer a physical launch impulse to the player when spawning from the bolter muzzle; projectile hit callbacks and enemy impact impulse remain active.
+- `Assets/Game/Rendering/GrimdarkWorldVolume.asset` provides the shared Warhammer-inspired visual grade: ACES tonemapping; `-8/-4` white balance; `-0.18` exposure, `+22` contrast, and `-18` saturation; cool restrained Bloom; dark vignette; and light medium film grain.
+- The global profile is placed in `Hub_1`, `Level_1`, `Level_2`, `PlayerMovementTest`, and `Jagernauts`. Each main camera has URP post-processing, SMAA, Stop NaN, and dithering enabled.
+- MK Toon itself is a licensed Asset Store package and is not currently imported or cached on this workstation. Material conversion to MK Toon remains pending package import; existing materials stay on the working URP Lit/Unlit setup.
+- `Assets/Plugins/_MK/MKEdgeDetection` is imported from the local Unity 2022.3/URP 14.0.10 projects. `RortypeForwardRenderer.asset` includes the MK Edge Detection Renderer Feature in Global mode, using depth and normal edges with a restrained dark navy outline for the Warhammer-inspired presentation.
+
+## Local VFX library added on 2026-09-13
+
+- `Assets/Plugins/VFX` contains seven reusable effect packs copied from local GP-May, SlimeSlayer, and Test/Test projects, with 1484 prefabs including helper objects and variants. The folder README lists packs, counts, sources, and shader compatibility notes.
+- Source metadata and the effect dependencies are retained. Demo scenes and demo-only folders are excluded; two external Cartoon FX resources are recovered under `Cartoon FX Remaster/Dependencies`. Four SlimeSlayer gameplay components are removed from the copied Rings prefab, and the copied CameraShake guards its UnityEditor import for player builds.
+- The library has not been connected to player attacks, skills, enemies, or environment events. Some references were already missing in the source projects and some materials still use Built-in shaders. `docs/vfx-import-report.md` records the copy checks and affected assets. Visual playback and shader import in the target Unity 2022.3/URP 14 project remain unverified.
+- `Jagernauts.unity` is a playable scene with the current DESANTGAME `TopDownPlayer` and `TopDownCamera` prefab instances. The camera rig automatically acquires and follows the active player, and the scene is enabled in `ProjectSettings/EditorBuildSettings.asset`.

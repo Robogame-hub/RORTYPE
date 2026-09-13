@@ -74,12 +74,12 @@ namespace RorType.Gameplay.AI
 
             body.useGravity = false;
             body.isKinematic = false;
-            body.linearDamping = 0f;
-            body.angularDamping = 0f;
+            body.drag = 0f;
+            body.angularDrag = 0f;
             body.constraints = RigidbodyConstraints.FreezeRotation;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             body.interpolation = RigidbodyInterpolation.Interpolate;
-            body.linearVelocity = flightDirection * speed;
+            body.velocity = flightDirection * speed;
             body.WakeUp();
 
             age = 0f;
@@ -139,8 +139,8 @@ namespace RorType.Gameplay.AI
                     && targetDamageable.Team != CombatTeam.Enemy
                     && targetDamageable.IsAlive)
                 {
-                    var hitDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
-                        ? body.linearVelocity.normalized
+                    var hitDirection = body != null && body.velocity.sqrMagnitude > 0.0001f
+                        ? body.velocity.normalized
                         : transform.forward;
                     targetDamageable.ReceiveHit(new CombatHitInfo(
                         damage,
@@ -154,8 +154,8 @@ namespace RorType.Gameplay.AI
                 var knockbackReceiver = other.GetComponentInParent<IKnockbackReceiver>();
                 if (knockbackForce > 0f && knockbackReceiver != null)
                 {
-                    var impactDirection = body != null && body.linearVelocity.sqrMagnitude > 0.0001f
-                        ? body.linearVelocity.normalized
+                    var impactDirection = body != null && body.velocity.sqrMagnitude > 0.0001f
+                        ? body.velocity.normalized
                         : transform.forward;
                     knockbackReceiver.ApplyKnockback(impactDirection, knockbackForce);
                 }

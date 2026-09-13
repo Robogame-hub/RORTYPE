@@ -59,7 +59,7 @@ namespace RorType.Gameplay.Player
         {
             body.position = safePosition;
             body.rotation = safeRotation;
-            body.linearVelocity = Vector3.zero;
+            body.velocity = Vector3.zero;
             body.angularVelocity = Vector3.zero;
             if (motor != null)
             {

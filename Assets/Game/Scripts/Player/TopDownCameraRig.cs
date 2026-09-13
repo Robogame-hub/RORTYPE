@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace RorType.Gameplay.Player
 {
+    [DefaultExecutionOrder(100)]
     public sealed class TopDownCameraRig : MonoBehaviour
     {
         [SerializeField] private Transform target;
@@ -16,12 +17,23 @@ namespace RorType.Gameplay.Player
         private Vector3 smoothedLookAheadOffset;
         private Vector3 smoothedLookAheadVelocity;
         private TopDownPlayerMotor targetMotor;
+        private TopDownFacingController targetFacing;
         private bool hasSmoothedTargetPosition;
+        private float nextTargetSearchTime;
+
+        private void OnEnable()
+        {
+            SetTarget(target);
+            nextTargetSearchTime = 0f;
+        }
 
         public void SetTarget(Transform newTarget)
         {
             target = newTarget;
-            targetMotor = target != null ? target.GetComponent<TopDownPlayerMotor>() : null;
+            targetMotor = target != null ? target.GetComponentInParent<TopDownPlayerMotor>() : null;
+            targetFacing = targetMotor != null
+                ? targetMotor.GetComponent<TopDownFacingController>()
+                : (target != null ? target.GetComponentInParent<TopDownFacingController>() : null);
             hasSmoothedTargetPosition = false;
             smoothedLookAheadOffset = Vector3.zero;
             smoothedLookAheadVelocity = Vector3.zero;
@@ -29,7 +41,7 @@ namespace RorType.Gameplay.Player
 
         private void LateUpdate()
         {
-            if (target == null)
+            if (!TryResolveTarget())
             {
                 return;
             }
@@ -67,10 +79,40 @@ namespace RorType.Gameplay.Player
         {
             if (targetMotor == null && target != null)
             {
-                targetMotor = target.GetComponent<TopDownPlayerMotor>();
+                targetMotor = target.GetComponentInParent<TopDownPlayerMotor>();
             }
 
             return targetMotor != null ? targetMotor.RenderPosition : target.position;
+        }
+
+        private bool TryResolveTarget()
+        {
+            if (target != null && target.gameObject.activeInHierarchy)
+            {
+                return true;
+            }
+
+            var activePlayer = PlayerResourceController.ActivePlayer;
+            if (activePlayer != null && activePlayer.isActiveAndEnabled)
+            {
+                SetTarget(activePlayer.transform);
+                return true;
+            }
+
+            if (Time.unscaledTime < nextTargetSearchTime)
+            {
+                return false;
+            }
+
+            nextTargetSearchTime = Time.unscaledTime + 0.5f;
+            var playerMotor = FindFirstObjectByType<TopDownPlayerMotor>();
+            if (playerMotor == null || !playerMotor.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            SetTarget(playerMotor.transform);
+            return true;
         }
 
         private Vector3 ResolveCursorLookAhead(Vector3 targetPosition)
@@ -80,8 +122,7 @@ namespace RorType.Gameplay.Player
                 return Vector3.zero;
             }
 
-            var facingController = target.GetComponent<TopDownFacingController>();
-            if (facingController == null || !facingController.TryGetAimPoint(out var aimPoint))
+            if (targetFacing == null || !targetFacing.TryGetAimPoint(out var aimPoint))
             {
                 return Vector3.zero;
             }

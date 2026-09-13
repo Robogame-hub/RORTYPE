@@ -132,10 +132,10 @@ Rigidbody:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000001}
-  serializedVersion: 5
+  serializedVersion: 4
   m_Mass: 70
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_Drag: 0
+  m_AngularDrag: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -176,7 +176,6 @@ MonoBehaviour:
   moveForwardKey: 119
   moveBackwardKey: 115
   fireMouseButton: 0
-  meleeMouseButton: 1
 --- !u!114 &460000008
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -270,26 +269,23 @@ MonoBehaviour:
   projectileMaxDistance: 20
   projectileRadius: 0.2
   projectileSpawnForwardOffset: 0.95
+  projectileMuzzleForwardOffset: 0.1
+  characterAnimator: {fileID: 0}
+  projectileMuzzle: {fileID: 0}
+  animateCharacter: 1
+  movementAnimationParameter: MoveSpeed
+  fireAnimationWeightParameter: FireWeight
+  locomotionAnimationState: Locomotion
+  upperBodyAnimationLayer: Upper Body
+  upperBodyFireBlendState: Fire Overlay
+  movementBlendDamping: 0.12
+  fireAnimationDuration: 0.42
   projectileColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
   projectileStretchMultiplier: 1.65
   projectileSquashMultiplier: 0.74
   projectileScaleRecoverySharpness: 10
   projectileDamage: 1
   projectileImpactImpulse: 1
-  automaticMelee: 1
-  meleeInterval: 0.16
-  meleePunchDuration: 0.18
-  meleeForwardReach: 0.72
-  meleeSideOffset: 0.42
-  meleeForwardOffset: 0.5
-  meleeHeightOffset: 0.12
-  meleeFistRadius: 0.2
-  meleeFistColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
-  meleeFistScaleBoost: 0.12
-  meleeFistForwardStretchBoost: 0.18
-  meleeDamage: 2
-  meleeImpactImpulse: 2
-  meleeHitBufferSize: 12
   bounceDuration: 0.22
   bounceSideScale: 0.13
   bounceHeightScale: 0.2
@@ -434,7 +430,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 460000022}
   m_Father: {fileID: 460000002}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!23 &460000014
@@ -444,7 +441,7 @@ MeshRenderer:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000012}
-  m_Enabled: 1
+  m_Enabled: 0
   m_CastShadows: 1
   m_ReceiveShadows: 1
   m_DynamicOccludee: 1
@@ -494,3 +491,21 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 460000012}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1001 &460000021
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 460000013}
+    m_Modifications: []
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
+--- !u!4 &460000022 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1517951056629930129, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
+  m_PrefabInstance: {fileID: 460000021}
+  m_PrefabAsset: {fileID: 0}

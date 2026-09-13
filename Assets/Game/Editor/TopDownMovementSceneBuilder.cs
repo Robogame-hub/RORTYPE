@@ -73,8 +73,8 @@ namespace RorType.Gameplay.Editor
             var rigidbody = player.GetComponent<Rigidbody>() ?? player.AddComponent<Rigidbody>();
             rigidbody.mass = 70f;
             rigidbody.useGravity = false;
-            rigidbody.linearDamping = 0f;
-            rigidbody.angularDamping = 0.05f;
+            rigidbody.drag = 0f;
+            rigidbody.angularDrag = 0.05f;
             rigidbody.interpolation = RigidbodyInterpolation.Interpolate;
             rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
             rigidbody.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
