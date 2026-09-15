@@ -1,5 +1,36 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6398972877852838248
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 4426582329986688923}
+  m_Layer: 0
+  m_Name: Muzzle
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &4426582329986688923
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6398972877852838248}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.00971, y: -0.00007, z: 0.00341}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 6841954304107343918}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &8292194168983852055
 GameObject:
   m_ObjectHideFlags: 0
@@ -162,7 +193,6 @@ MonoBehaviour:
   sprintKey: 304
   respawnKey: 114
   interactKey: 101
-  jumpKey: 32
   dashKey: 306
   moveLeftKey: 97
   moveRightKey: 100
@@ -254,7 +284,7 @@ MonoBehaviour:
   visualRoot: {fileID: 0}
   feedbackTransform: {fileID: 0}
   characterAnimator: {fileID: 0}
-  projectileMuzzle: {fileID: 0}
+  projectileMuzzle: {fileID: 4426582329986688923}
   turnSpeedDegrees: 720
   mouseAimRayDistance: 250
   automaticFire: 1
@@ -262,9 +292,8 @@ MonoBehaviour:
   projectileSpeed: 28
   projectileLifetime: 1.4
   projectileMaxDistance: 20
-  projectileRadius: 0.2
+  projectileRadius: 0.07
   projectileSpawnForwardOffset: 0.95
-  projectileMuzzleForwardOffset: 0.1
   projectileColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
   projectileStretchMultiplier: 1.35
   projectileSquashMultiplier: 0.82
@@ -272,6 +301,7 @@ MonoBehaviour:
   projectileDamage: 1
   projectileImpactImpulse: 1
   animateCharacter: 1
+  animationSpeedMultiplier: 1
   movementAnimationParameter: MoveSpeed
   fireAnimationWeightParameter: FireWeight
   locomotionAnimationState: Locomotion
@@ -279,6 +309,14 @@ MonoBehaviour:
   upperBodyFireBlendState: Fire Overlay
   movementBlendDamping: 0.12
   fireAnimationDuration: 0.42
+  muzzleFlashPrefab: {fileID: 105160, guid: 310bd15d8e6345f49dc8a085bd3d9dd0, type: 3}
+  environmentImpactPrefab: {fileID: 115120, guid: acb273631e40442991b85caea9855970, type: 3}
+  footstepDustPrefab: {fileID: 165672, guid: 93c3666445de4edabdc3f5ca883eaa66, type: 3}
+  boltTrailMaterial: {fileID: 2100000, guid: b6616042967e4c589a4767ba7fb39a7c, type: 2}
+  muzzleFlashScale: 0.4
+  impactScale: 0.35
+  dustScale: 2.2
+  footstepDistance: 1.3
   bounceDuration: 0.2
   bounceSideScale: 0.08
   bounceHeightScale: 0.14
@@ -451,11 +489,19 @@ PrefabInstance:
     m_RemovedGameObjects:
     - {fileID: 4499880851523865272, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
     - {fileID: 7930717237201802435, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
-    m_AddedGameObjects: []
+    m_AddedGameObjects:
+    - targetCorrespondingSourceObject: {fileID: 5795363605197533889, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4426582329986688923}
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
 --- !u!4 &1985556644772731518 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1517951056629930129, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
+  m_PrefabInstance: {fileID: 1053496301947405039}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &6841954304107343918 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 5795363605197533889, guid: bc7a9848b726d1c4b8123ab0c7e77619, type: 3}
   m_PrefabInstance: {fileID: 1053496301947405039}
   m_PrefabAsset: {fileID: 0}

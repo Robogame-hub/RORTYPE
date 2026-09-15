@@ -103,7 +103,7 @@ namespace RorType.Gameplay.Environment
 
         private void TryReceiveDashCollision(Collision collision)
         {
-            if (!IsAlive || dashImpactDamage <= 0f || collision == null)
+            if (!IsAlive || collision == null)
             {
                 return;
             }
@@ -128,7 +128,7 @@ namespace RorType.Gameplay.Environment
                 ? collision.GetContact(0).point
                 : transform.position + Vector3.up;
 
-            ReceiveHit(new CombatHitInfo(
+            DestroyImmediately(new CombatHitInfo(
                 dashImpactDamage,
                 point,
                 direction,

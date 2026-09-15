@@ -11,7 +11,7 @@ namespace RorType.Gameplay.Player
         [SerializeField] private KeyCode sprintKey = KeyCode.LeftShift;
         [SerializeField] private KeyCode respawnKey = KeyCode.R;
         [SerializeField] private KeyCode interactKey = KeyCode.E;
-        [SerializeField] private KeyCode jumpKey = KeyCode.Space;
+
         [SerializeField] private KeyCode dashKey = KeyCode.LeftControl;
         [SerializeField] private KeyCode moveLeftKey = KeyCode.A;
         [SerializeField] private KeyCode moveRightKey = KeyCode.D;
@@ -45,7 +45,7 @@ namespace RorType.Gameplay.Player
             SprintHeld = Input.GetKey(sprintKey);
             RespawnPressed = Input.GetKeyDown(respawnKey);
             InteractPressed = Input.GetKeyDown(ResolveInteractKey());
-            JumpPressed = Input.GetKeyDown(jumpKey);
+            JumpPressed = false; // Jump is reserved for a future active ability.
             DashPressed = Input.GetKeyDown(dashKey);
             var combatMouseBlocked = IsCombatMouseBlocked();
             FireHeld = !combatMouseBlocked && Input.GetMouseButton(fireMouseButton);

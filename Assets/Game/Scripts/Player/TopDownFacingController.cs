@@ -27,9 +27,9 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0.1f)] private float projectileSpeed = 28f;
         [SerializeField, Min(0.01f)] private float projectileLifetime = 1.4f;
         [SerializeField, Min(0.1f)] private float projectileMaxDistance = 20f;
-        [SerializeField, Min(0.01f)] private float projectileRadius = 0.2f;
+        [SerializeField, Min(0.01f)] private float projectileRadius = 0.07f;
         [SerializeField, Min(0f)] private float projectileSpawnForwardOffset = 0.95f;
-        [SerializeField, Min(0f)] private float projectileMuzzleForwardOffset = 0.1f;
+
         [SerializeField] private Color projectileColor = new Color(0.86f, 0.14f, 0.14f);
         [SerializeField, Min(0.01f)] private float projectileStretchMultiplier = 1.65f;
         [SerializeField, Range(0.1f, 1f)] private float projectileSquashMultiplier = 0.74f;
@@ -39,6 +39,7 @@ namespace RorType.Gameplay.Player
 
         [Header("Character animation")]
         [SerializeField] private bool animateCharacter = true;
+        [SerializeField, Min(0.01f)] private float animationSpeedMultiplier = 1f;
         [SerializeField] private string movementAnimationParameter = "MoveSpeed";
         [SerializeField] private string fireAnimationWeightParameter = "FireWeight";
         [SerializeField] private string locomotionAnimationState = "Locomotion";
@@ -46,6 +47,21 @@ namespace RorType.Gameplay.Player
         [SerializeField] private string upperBodyFireBlendState = "Fire Overlay";
         [SerializeField, Min(0f)] private float movementBlendDamping = 0.12f;
         [SerializeField, Min(0.01f)] private float fireAnimationDuration = 0.42f;
+
+        [Header("Bolter effects")]
+        [SerializeField] private GameObject muzzleFlashPrefab;
+        [SerializeField] private GameObject environmentImpactPrefab;
+        [SerializeField] private GameObject footstepDustPrefab;
+        [SerializeField] private Material boltTrailMaterial;
+        [SerializeField, Min(0.01f)] private float muzzleFlashScale = 0.4f;
+        [SerializeField, Min(0.01f)] private float impactScale = 0.35f;
+        [SerializeField, Min(0.01f)] private float dustScale = 2.2f;
+        [SerializeField, Min(0.1f)] private float footstepDistance = 1.3f;
+        private float fireClipLength;
+        private float footstepTravel;
+
+
+        private TopDownGroundProbe groundProbe;
 
         [Header("Bounce")]
         [SerializeField, Min(0.01f)] private float bounceDuration = 0.22f;
@@ -60,6 +76,7 @@ namespace RorType.Gameplay.Player
         private CapsuleCollider capsuleCollider;
         private float shotCooldownTimer;
         private bool shotQueued;
+        private bool projectilePending;
         private Vector3 currentAimDirection = Vector3.forward;
         private Vector3 feedbackBaseLocalScale = Vector3.one;
         private float bounceTimer;
@@ -70,6 +87,23 @@ namespace RorType.Gameplay.Player
         private int locomotionAnimationFullPathHash;
         private int upperBodyFireBlendFullPathHash;
         private float fireAnimationTimer;
+        private bool standingFireActive;
+        private static readonly int StandingFireStateHash = Animator.StringToHash("Base Layer.Standing Fire");
+
+        private bool IsMovingForFire()
+        {
+            return (inputAdapter != null && inputAdapter.HasMovementInput)
+                || (motor != null && (motor.CurrentSpeed > 0.05f || motor.IsDashing));
+        }
+
+        private void EndStandingFire()
+        {
+            if (!standingFireActive) return;
+            standingFireActive = false;
+            characterAnimator.CrossFadeInFixedTime(locomotionAnimationFullPathHash, 0.08f, 0);
+            if (upperBodyAnimationLayerIndex >= 0)
+                characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+        }
 
         private void Awake()
         {
@@ -79,14 +113,23 @@ namespace RorType.Gameplay.Player
             resources = GetComponent<PlayerResourceController>();
             capsuleCollider = GetComponent<CapsuleCollider>();
 
+            groundProbe = GetComponent<TopDownGroundProbe>();
             characterAnimator = ResolveCharacterAnimator();
+            if (characterAnimator != null && characterAnimator.runtimeAnimatorController != null)
+            {
+                foreach (var clip in characterAnimator.runtimeAnimatorController.animationClips)
+                    if (clip.name.EndsWith("|Fire", StringComparison.Ordinal) || clip.name == "Fire")
+                        fireClipLength = clip.length;
+            }
             visualRoot = ResolveVisualRoot();
+
             projectileMuzzle = ResolveProjectileMuzzle();
             CacheAnimationHashes();
             if (characterAnimator != null)
             {
                 characterAnimator.applyRootMotion = false;
                 characterAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+                characterAnimator.speed = animationSpeedMultiplier;
                 upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
                 if (upperBodyAnimationLayerIndex >= 0)
                 {
@@ -118,8 +161,15 @@ namespace RorType.Gameplay.Player
             // Read the motor after its FixedUpdate so the blend tree receives
             // the real movement state, including acceleration and dash motion.
             UpdateCharacterAnimation();
+            UpdateFootstepDust();
             bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
             UpdateFeedbackVisual(Time.deltaTime);
+            // Spawn after animation evaluation and visual feedback moved the weapon bone.
+            if (projectilePending)
+            {
+                projectilePending = false;
+                SpawnProjectile();
+            }
         }
 
         private void TickFacingAndAttacks(float deltaTime)
@@ -220,14 +270,16 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            shotCooldownTimer = shotInterval;
+            shotCooldownTimer = ResolveShotCycle();
             TriggerFireAnimation();
-            SpawnProjectile();
+            projectilePending = true;
         }
 
         private void SpawnProjectile()
         {
             var spawnOrigin = ResolveProjectileSpawnOrigin();
+            PlayerWeaponVfx.Spawn(muzzleFlashPrefab, projectileMuzzle != null ? projectileMuzzle.position : spawnOrigin,
+                Quaternion.LookRotation(currentAimDirection), muzzleFlashScale, projectileMuzzle, 0.25f);
             var effectiveProjectileLifetime = ResolveProjectileLifetime(projectileSpeed, projectileLifetime, projectileMaxDistance);
 
             var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -269,6 +321,7 @@ namespace RorType.Gameplay.Player
                 gameObject,
                 CombatTeam.Player);
 
+            projectileSphere.ConfigureBolterEffects(environmentImpactPrefab, impactScale, boltTrailMaterial);
             TriggerBounce();
         }
 
@@ -276,7 +329,7 @@ namespace RorType.Gameplay.Player
         {
             if (projectileMuzzle != null)
             {
-                return projectileMuzzle.position + (currentAimDirection * projectileMuzzleForwardOffset);
+                return projectileMuzzle.position;
             }
 
             var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
@@ -290,7 +343,18 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            fireAnimationTimer = fireAnimationDuration;
+            fireAnimationTimer = ResolveShotCycle();
+            if (!IsMovingForFire())
+            {
+                standingFireActive = true;
+                characterAnimator.Play(StandingFireStateHash, 0, 0f);
+                if (upperBodyAnimationLayerIndex >= 0)
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
+            }
+            else
+            {
+                EndStandingFire();
+            }
             characterAnimator.SetFloat(fireAnimationWeightParameterHash, 1f);
 
             if (upperBodyAnimationLayerIndex >= 0)
@@ -318,6 +382,9 @@ namespace RorType.Gameplay.Player
                 // movement frame because Update/FixedUpdate ran in another order.
                 isMoving = motor.CurrentSpeed > 0.05f || motor.IsDashing;
             }
+
+            if (standingFireActive && (isMoving || fireAnimationTimer <= 0f))
+                EndStandingFire();
 
             var targetMoveSpeed = ResolveMovementAnimationValue(isMoving);
             characterAnimator.SetFloat(
@@ -369,6 +436,30 @@ namespace RorType.Gameplay.Player
             return directionSign * actualSpeedRatio;
         }
 
+        private float ResolveShotCycle()
+        {
+            if (!animateCharacter || characterAnimator == null || upperBodyAnimationLayerIndex < 0)
+                return Mathf.Max(shotInterval, fireAnimationDuration);
+            var state = characterAnimator.GetCurrentAnimatorStateInfo(upperBodyAnimationLayerIndex);
+            var playback = Mathf.Max(0.01f, characterAnimator.speed * Mathf.Abs(state.speed * state.speedMultiplier));
+            return Mathf.Max(shotInterval, (fireClipLength > 0f ? fireClipLength : fireAnimationDuration) / playback);
+        }
+
+        private void UpdateFootstepDust()
+        {
+            if (motor == null || groundProbe == null || !motor.IsGrounded || motor.IsDashing || motor.CurrentSpeed < 0.15f)
+            {
+                footstepTravel = 0f;
+                return;
+            }
+            footstepTravel += motor.CurrentSpeed * Time.deltaTime;
+            if (footstepTravel < footstepDistance) return;
+            footstepTravel %= footstepDistance;
+            // A ring around the body stays visible outside the boots and silhouette.
+            var point = groundProbe.GroundPoint + groundProbe.GroundNormal * 0.1f;
+            PlayerWeaponVfx.Spawn(footstepDustPrefab, point,
+                Quaternion.FromToRotation(Vector3.forward, groundProbe.GroundNormal), dustScale, null, 2f);
+        }
         private void CacheAnimationHashes()
         {
             movementAnimationParameterHash = Animator.StringToHash(movementAnimationParameter);
@@ -399,6 +490,7 @@ namespace RorType.Gameplay.Player
 
         public void ResetFeedbackState()
         {
+            standingFireActive = false;
             bounceTimer = 0f;
             shotCooldownTimer = 0f;
             shotQueued = false;

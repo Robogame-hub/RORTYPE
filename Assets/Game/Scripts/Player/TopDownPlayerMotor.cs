@@ -1,4 +1,5 @@
 using RorType.Gameplay.Combat;
+using RorType.Gameplay.Environment;
 using UnityEngine;
 
 namespace RorType.Gameplay.Player
@@ -412,7 +413,7 @@ namespace RorType.Gameplay.Player
 
         private void TryApplyDashImpact(RaycastHit hit, Vector3 direction)
         {
-            if (!IsDashing || dashImpactDamage <= 0f || hit.collider == null)
+            if (!IsDashing || hit.collider == null)
             {
                 return;
             }
@@ -427,6 +428,21 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
+            // Destructible scenery breaks on contact, regardless of its remaining HP
+            // or the separate damage value used against enemies.
+            var impact = new CombatHitInfo(
+                dashImpactDamage, hit.point, direction, dashImpactImpulse, gameObject, CombatTeam.Player);
+            if (damageableComponent is DestructibleCover cover)
+            {
+                cover.DestroyImmediately(impact);
+                return;
+            }
+            if (damageableComponent is DestructibleLootContainer container)
+            {
+                container.DestroyImmediately(impact);
+                return;
+            }
+            if (dashImpactDamage <= 0f) return;
             for (var i = 0; i < dashImpactCount; i++)
             {
                 if (dashImpactDamageables[i] == damageableComponent)

@@ -748,3 +748,64 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 - Source metadata and the effect dependencies are retained. Demo scenes and demo-only folders are excluded; two external Cartoon FX resources are recovered under `Cartoon FX Remaster/Dependencies`. Four SlimeSlayer gameplay components are removed from the copied Rings prefab, and the copied CameraShake guards its UnityEditor import for player builds.
 - The library has not been connected to player attacks, skills, enemies, or environment events. Some references were already missing in the source projects and some materials still use Built-in shaders. `docs/vfx-import-report.md` records the copy checks and affected assets. Visual playback and shader import in the target Unity 2022.3/URP 14 project remain unverified.
 - `Jagernauts.unity` is a playable scene with the current DESANTGAME `TopDownPlayer` and `TopDownCamera` prefab instances. The camera rig automatically acquires and follows the active player, and the scene is enabled in `ProjectSettings/EditorBuildSettings.asset`.
+
+## Global animation speed multiplier on 2026-09-13
+
+- `TopDownFacingController` now exposes a serialized `animationSpeedMultiplier` field (default `1`) under the `Character animation` header. It is applied once in `Awake` as `characterAnimator.speed`, so animation playback speed is controlled by a real inspector field that persists in prefabs/scenes.
+- Previously nothing in the project wrote to `Animator.speed`, so changing `Animator.speed` in the Inspector during Play Mode never survived a scene reload (portal travel destroys and re-instantiates the player), and the value always fell back to `1`.
+- The locomotion blend tree still multiplies the base speed with its own `m_TimeScale` (`1.6x` walk / `2.4x` sprint), so the effective on-screen animation rate is `animationSpeedMultiplier * m_TimeScale`. Lowering `animationSpeedMultiplier` below `1` slows down all CHARACTER animations uniformly.
+
+## 2026-09-13 bolter feedback and jump decision
+
+- Ordinary Space jump is disabled in TopDownInputAdapter. Jump movement internals remain reserved for a future active ability; the ability itself is not implemented.
+- TopDownFacingController serializes muzzle flash, environment impact, footstep dust and trail material references on player prefabs and scene-local players. Authored effect copies and dedicated URP particle materials live in Assets/Game/VFX/Bolter; the imported VFX library remains unchanged.
+- Fire cadence now waits at least one imported Fire clip duration divided by Animator and upper-body state playback speed, with shotInterval as the minimum interval. Each shot restarts only the masked Fire overlay and emits its muzzle flash and bolt together.
+- Grounded movement emits alternating foot dust by distance travelled (1.3m default); standing, falling and dashing do not emit walking dust.
+- Regular bolter projectiles have a warm tapered 0.12s trail that fades after the projectile is destroyed. Environment collisions spawn sparks; Enemy-team receivers do not, including invulnerable enemies. Skills retain their existing projectile presentation.
+- Effect copies use the project-owned BolterParticles URP shader. Missing source spark material is replaced by the copied glow material.
+- No Unity, batchmode, compilation or gameplay tests were run at the user's request. Visual tuning and gameplay testing are left to the user.
+## 2026-09-13 feedback corrections: muzzle, foot rings, Fire mask
+
+- User reported an oversized muzzle flash, unattractive walking clouds, and the weapon retaining Idle during shots.
+- PlayerWeaponVfx now instantiates at world scale before attaching to the muzzle, preventing imported bone scale from multiplying the effect. Muzzle scale is explicitly 0.06 on player components, with a 0.12s lifetime.
+- footstepDustPrefab now contains a flat, soft-edged procedural dust ring instead of the imported cloud. FootstepRingVfx expands/fades it over 0.3s, with a maximum 0.65m diameter. Alternating rings use actual foot.L/foot.R positions projected onto the ground plane; movement restrictions remain unchanged.
+- Source FBX hierarchy includes CHIBI_RIG before CTRL_root. The previous CharacterUpperBody mask omitted this prefix and had incorrect leg paths. Mask paths now match CHIBI_RIG/CTRL_root/pelvis/... so the existing masked Fire blend can affect the arms and weapon; legs remain excluded. This corrects the earlier documentation's assumption that the mask was already effective.
+- No Unity execution or tests were performed; user validates visual results.
+## 2026-09-13 VFX visibility correction
+- The previous visual correction over-reduced muzzle scale/lifetime. Restored world scale 0.4 and lifetime 0.25s while retaining world-scale-preserving attachment.
+- Foot rings now expand to 1m over 0.5s with stronger sand tint/opacity, explicit forward-to-ground-normal rotation, and 0.07m ground clearance.
+- Custom effect shader passes are explicitly named VFXForward and tagged SRPDefaultUnlit; legacy disabled-pass lists were removed from copied materials.
+- These are source-level corrections; visual visibility is not confirmed in Play Mode. No tests launched.
+## 2026-09-13 projectile size, body ring, authored muzzle
+- Regular projectile radius is 0.07m (previously 0.2m), with trail width 0.055m.
+- The DESANTGAME player prefab now explicitly references its user-authored Muzzle transform. Flash position uses the exact muzzle position, without projectile forward offset. Projectile/flash creation runs in LateUpdate after animation evaluation and visual feedback; muzzle particle simulation is local so the flash follows the weapon.
+- Walking dust is now a 1.8m ring around the player, starting at 75% diameter to remain outside the boots, 0.1m above the sampled ground. This replaces the hard-to-see per-foot placement.
+- No Unity execution or tests were run; placement and visibility still require the user's Play Mode review.
+- Both the regular bolt and muzzle flash now originate exactly at the authored Muzzle position; the old muzzle forward offset is no longer used.
+
+- Walking effect preference: one ring around the character, not individual feet; cool gray RGB (0.68, 0.70, 0.72) replaces the brown/sand tint in runtime, material, and shader defaults.
+
+## 2026-09-13 standing fire and walking ring size
+- Walking ring diameter increased from 1.8m to 2.2m, retaining the gray color.
+- Added Base Layer.Standing Fire using the imported Fire clip directly. While stationary, each shot restarts that state and suppresses the upper-body overlay so Idle cannot override it. Movement or completion restores Locomotion and the masked upper-body layer.
+- This replaces reliance on the upper-body blend/mask for stationary shots; previous claims that mask changes alone resolved standing fire were not confirmed by user testing.
+- No Unity or tests launched. User verifies animation and VFX in Play Mode.
+## 2026-09-13 Standing Fire import failure
+- Existing Editor.log reported a controller YAML parser failure at the final Standing Fire field (line 261), followed by Animator.GotoState: State could not be found. The previous added state was not successfully imported.
+- Corrected the controller's empty string fields and terminated the file with a newline, using consistent CRLF. The earlier gameplay fix cannot be considered validated until the corrected controller imports.
+- Read the existing editor log only; no Unity execution or tests initiated.
+## Dash instantly breaks destructible scenery
+- TopDownPlayerMotor's swept dash contact calls DestroyImmediately for DestructibleCover and DestructibleLootContainer, regardless of remaining health or enemy dash damage settings.
+- DestructibleLootContainer's collision fallback also destroys immediately. Existing debris and loot behavior is preserved, including trees dropping no loot.
+- Enemy dash damage and explosive-barrel warning behavior remain as authored. No Unity or gameplay tests were run.
+## 2026-09-14 compact HUD reference revision
+
+- PlayerStatusHud.prefab now uses an open layout: upper-left money with a coin seal, lower-left thin health/shield/stamina bars and dash charges, two 64px active skill slots at bottom center, and compact lower-right ammunition. Opaque panel backgrounds, section headers and redundant captions are disabled.
+- MinimalHudGraphic supplies authored vector silhouettes for radial burst, sticky bomb, ammunition, coin and the broken-circle mouse reticle. Cooldowns dim the skill silhouettes and retain numeric countdowns/key labels.
+- The reticle tracks the mouse during gameplay; the previous system cursor visibility is restored for shops, portal choices, pause, focus loss, pointer exit and runtime disable/destruction.
+- HUD remains a shared authored Resources prefab instantiated by the existing PlayerStatusUiRuntime. No new scene or runtime UI builder was added. Source/reference checks only; Unity visual review remains pending.
+
+## 2026-09-14 HUD screenshot corrections
+- Removed the currency seal and shield gauge/label; shifted vitals down 10 reference pixels. Replaced the ammo pictogram with a bolter silhouette; ammo count remains.
+- Stamina matches HP dimensions (340 x 16), below HP with a 6px gap and brass tint. Its full fill is a visual placeholder, disconnected from StaminaNormalized. Shared sprint/shield stamina behavior is deferred; existing gameplay resource logic is unchanged.
+- Prefab reference checks passed; Unity visual verification remains pending.

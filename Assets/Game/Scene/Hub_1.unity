@@ -29261,7 +29261,7 @@ MonoBehaviour:
   projectileSpeed: 28
   projectileLifetime: 1.4
   projectileMaxDistance: 20
-  projectileRadius: 0.2
+  projectileRadius: 0.07
   projectileSpawnForwardOffset: 0.95
   projectileColor: {r: 0.86, g: 0.14, b: 0.14, a: 1}
   projectileStretchMultiplier: 1.35
@@ -29273,6 +29273,12 @@ MonoBehaviour:
   bounceSideScale: 0.08
   bounceHeightScale: 0.14
   bounceScaleSharpness: 18
+  environmentImpactPrefab: {fileID: 115120, guid: acb273631e40442991b85caea9855970, type: 3}
+  footstepDustPrefab: {fileID: 165672, guid: 93c3666445de4edabdc3f5ca883eaa66, type: 3}
+  boltTrailMaterial: {fileID: 2100000, guid: b6616042967e4c589a4767ba7fb39a7c, type: 2}
+  muzzleFlashPrefab: {fileID: 105160, guid: 310bd15d8e6345f49dc8a085bd3d9dd0, type: 3}
+  muzzleFlashScale: 0.4
+  dustScale: 2.2
 --- !u!114 &651250631
 MonoBehaviour:
   m_ObjectHideFlags: 0

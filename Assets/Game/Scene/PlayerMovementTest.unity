@@ -1402,6 +1402,12 @@ MonoBehaviour:
   upperBodyFireBlendState: Fire Overlay
   movementBlendDamping: 0.12
   fireAnimationDuration: 0.42
+  environmentImpactPrefab: {fileID: 115120, guid: acb273631e40442991b85caea9855970, type: 3}
+  footstepDustPrefab: {fileID: 165672, guid: 93c3666445de4edabdc3f5ca883eaa66, type: 3}
+  boltTrailMaterial: {fileID: 2100000, guid: b6616042967e4c589a4767ba7fb39a7c, type: 2}
+  muzzleFlashPrefab: {fileID: 105160, guid: 310bd15d8e6345f49dc8a085bd3d9dd0, type: 3}
+  muzzleFlashScale: 0.4
+  dustScale: 2.2
 --- !u!114 &300100017
 MonoBehaviour:
   m_ObjectHideFlags: 0
