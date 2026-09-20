@@ -809,3 +809,36 @@ This supersedes older minimap notes that listed enemies, chests, capsules, or de
 - Removed the currency seal and shield gauge/label; shifted vitals down 10 reference pixels. Replaced the ammo pictogram with a bolter silhouette; ammo count remains.
 - Stamina matches HP dimensions (340 x 16), below HP with a 6px gap and brass tint. Its full fill is a visual placeholder, disconnected from StaminaNormalized. Shared sprint/shield stamina behavior is deferred; existing gameplay resource logic is unchanged.
 - Prefab reference checks passed; Unity visual verification remains pending.
+
+## 2026-09-15 bolter attachment correction
+- Jagernauts inherits the DESANTGAME TopDownPlayer prefab. Its replacement Bolter is parented to the shared CHARACTER socket (Transform 2097923052667542718).
+- The socket was attached to CTRL_hand_IK.R_end, a sibling control branch rather than the deforming hand.R bone. CharacterUpperBody animates the deforming arm/hand chain but excludes the IK control branch, so their animation poses can diverge. Earlier notes describing the attachment as already correct were inaccurate.
+- Reparented the shared socket to hand.R (imported Transform -8208865101949341500), preserving its authored world pose through a calculated local offset. Bolter model transforms and the user-authored TopDownPlayer overrides are preserved.
+- Verified imported bone IDs, prefab inheritance, socket pose preservation and diff whitespace. Play Mode movement/fire verification remains pending.
+
+## 2026-09-16 CHARACTER root motion and run loop
+- Run keeps its current source take, 0-106 frame range and user-authored blend-tree speed (currently 4x). Enabled Loop Pose; Generic avatar root is CTRL_root, matching the existing CHIBI_RIG/CTRL_root motion node.
+- CHARACTER prefab now enables root motion and has CharacterRootMotion on its Animator object. OnAnimatorMove consumes extracted travel for motor-driven players so the mesh stays with the Rigidbody; standalone CHARACTER uses built-in root displacement. This is in-place playback for gameplay, not animation-driven Rigidbody locomotion.
+- TopDownFacingController no longer disables extraction in Awake. No per-frame base Run restart was found. Visual confirmation of the reported loop snap remains pending in Play Mode.
+- Older notes describing 1.6x/2.4x run playback are superseded by the current user-authored 4x controller values. Existing clip assignments were preserved.
+
+## 2026-09-16 stationary locomotion correction
+- User reported running in place after root-motion extraction. DESANTGAME TopDownPlayer.prefab had walkSpeed = 0; input still selected Run while the motor requested zero displacement. Restored walkSpeed = 10, matching the motor default; sprintSpeed remains 15. Jagernauts has no scene override for either speed.
+- The previous root-motion investigation missed this serialized setting. Gameplay movement remains motor-driven; Play Mode confirmation is pending.
+
+## 2026-09-17 direct CHARACTER root motion (supersedes September 16 attempts)
+- User explicitly wants built-in Animator root motion directly moving CHARACTER, without routing animation displacement through the gameplay Rigidbody/controller. Zero scripted movement speed is intentional.
+- Removed CharacterRootMotion and its prefab component: its OnAnimatorMove callback was swallowing animation displacement. Apply Root Motion remains enabled; CTRL_root extraction and Run Loop Pose are retained.
+- TopDownPlayerMotor visual smoothing now leaves root-motion Animator transforms alone and exposes their actual position to camera tracking, instead of pulling CHARACTER back to the gameplay root each LateUpdate.
+- DESANTGAME TopDownPlayer walkSpeed and sprintSpeed are both zero. Root-motion movement is not synchronized to the parent gameplay collider, per the explicitly accepted direct-animation scope. Earlier claims that walkSpeed=0 was an erroneous configuration are withdrawn.
+- Static reference/diff checks only; Unity playback remains unverified.
+
+
+## 2026-09-20 root-motion direction and cursor-facing correction
+- User confirmed the body must always face the cursor, including sideways movement. Zero motor walk/sprint speeds remain intentional.
+- The September 17 setup lost WASD direction: CurrentWorldMoveDirection stays zero at zero motor speed, so every movement key selected MoveSpeed=+1 while the Animator faced the mouse. The selected FBX CTRL_root also has a reversed forward axis relative to Run travel.
+- CharacterRootMotion is now authored on CHARACTER's Animator. With zero motor speeds, OnAnimatorMove applies the extracted planar travel length directly to CHARACTER along normalized, camera-relative WASD. It does not transfer displacement to the Rigidbody or apply animation rotation. No input means no displacement. Standalone CHARACTER retains ApplyBuiltinRootMotion; nonzero motor speeds and dash leave travel to the motor.
+- This supersedes the September 17 callback-free implementation: directional steering of extracted root motion is required to retain cursor-facing with the existing single Run clip. Movement distance still comes from animation. The parent gameplay collider remains unsynchronized as in the previously accepted scope.
+- Facing uses requested input direction for the signed MoveSpeed at zero motor speed and aims from the moving CHARACTER position. Input executes before facing; animation parameters are set in Update, and CHARACTER's Animator uses Normal update mode.
+- Locomotion thresholds are restored to -1.5/-1/0/1/1.5 with reverse Run at -4, Idle, and forward Run at +4. Dedicated sideways animation clips are still absent; sideways movement uses Run.
+- Static prefab/GUID/clip-reference checks and source review completed. Unity import and Play Mode verification remain pending.

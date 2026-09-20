@@ -70,6 +70,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Range(0f, 0.9f)] private float fallLandingHeightSquash = 0.33f;
 
         private Rigidbody body;
+        private Animator visualAnimator;
         private CapsuleCollider capsuleCollider;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
@@ -111,6 +112,11 @@ namespace RorType.Gameplay.Player
         public float CurrentSpeed { get; private set; }
         public float WalkSpeed => walkSpeed;
         public float SprintSpeed => sprintSpeed;
+        public Vector3 RequestedWorldMoveDirection => inputAdapter != null
+            ? ResolveWorldMoveDirection(inputAdapter.MoveInput)
+            : Vector3.zero;
+        public bool UsesDirectRootMotion => visualAnimator != null && visualAnimator.applyRootMotion
+            && walkSpeed <= 0.01f && sprintSpeed <= 0.01f;
         public bool IsGrounded => isGroundedForLocomotion;
         public bool IsSprinting { get; private set; }
         public bool IsDashing => dashRemainingDistance > 0f;
@@ -129,6 +135,7 @@ namespace RorType.Gameplay.Player
             groundProbe = GetComponent<TopDownGroundProbe>();
             resources = GetComponent<PlayerResourceController>();
             visualRoot = ResolveVisualRoot();
+            visualAnimator = visualRoot != null ? visualRoot.GetComponent<Animator>() : null;
             CacheVisualBasePose();
             dashCharges = GetMaxDashCharges();
 
@@ -600,6 +607,15 @@ namespace RorType.Gameplay.Player
         {
             if (visualRoot == null || visualRoot == transform)
             {
+                return;
+            }
+
+            if (visualAnimator != null && visualAnimator.applyRootMotion)
+            {
+                // Built-in root motion owns this transform. Do not pull the model
+                // back to the gameplay root after every animation evaluation.
+                smoothedVisualWorldPosition = visualRoot.position;
+                hasVisualPosition = true;
                 return;
             }
 

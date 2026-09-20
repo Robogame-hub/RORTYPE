@@ -127,7 +127,8 @@ namespace RorType.Gameplay.Player
             CacheAnimationHashes();
             if (characterAnimator != null)
             {
-                characterAnimator.applyRootMotion = false;
+                // Extract animation travel; CharacterRootMotion steers it on CHARACTER.
+                characterAnimator.applyRootMotion = true;
                 characterAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 characterAnimator.speed = animationSpeedMultiplier;
                 upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
@@ -154,13 +155,12 @@ namespace RorType.Gameplay.Player
             }
 
             TickFacingAndAttacks(Time.deltaTime);
+            // Supply this frame's input before the Animator evaluates root motion.
+            UpdateCharacterAnimation();
         }
 
         private void LateUpdate()
         {
-            // Read the motor after its FixedUpdate so the blend tree receives
-            // the real movement state, including acceleration and dash motion.
-            UpdateCharacterAnimation();
             UpdateFootstepDust();
             bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
             UpdateFeedbackVisual(Time.deltaTime);
@@ -204,7 +204,7 @@ namespace RorType.Gameplay.Player
 
         private Vector3 ResolveAimDirection()
         {
-            var aimOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var aimOrigin = ResolveAimOrigin();
             var currentCamera = Camera.main;
             if (currentCamera != null)
             {
@@ -234,7 +234,7 @@ namespace RorType.Gameplay.Player
 
         public bool TryGetAimPoint(out Vector3 worldAimPoint)
         {
-            var aimOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var aimOrigin = ResolveAimOrigin();
             var currentCamera = Camera.main;
             if (currentCamera != null)
             {
@@ -249,6 +249,15 @@ namespace RorType.Gameplay.Player
 
             worldAimPoint = aimOrigin + currentAimDirection;
             return false;
+        }
+
+        private Vector3 ResolveAimOrigin()
+        {
+            var bodyCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            // Direct root motion can move CHARACTER away from the gameplay collider.
+            return motor != null && motor.UsesDirectRootMotion && characterAnimator != null
+                ? characterAnimator.transform.position + (bodyCenter - transform.position)
+                : bodyCenter;
         }
 
         private void TryShoot()
@@ -411,7 +420,7 @@ namespace RorType.Gameplay.Player
             }
 
             var movementDirection = motor != null
-                ? motor.CurrentWorldMoveDirection
+                ? (motor.UsesDirectRootMotion ? motor.RequestedWorldMoveDirection : motor.CurrentWorldMoveDirection)
                 : Vector3.zero;
             movementDirection.y = 0f;
 

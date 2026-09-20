@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 
 namespace RorType.Gameplay.Player
 {
+    [DefaultExecutionOrder(-100)]
     public sealed class TopDownInputAdapter : MonoBehaviour
     {
         [SerializeField] private string horizontalAxis = "Horizontal";
