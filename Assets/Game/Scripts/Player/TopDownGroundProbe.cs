@@ -98,7 +98,7 @@ namespace RorType.Gameplay.Player
             var lossyScale = transform.lossyScale;
             var radius = capsuleCollider.radius * Mathf.Max(Mathf.Abs(lossyScale.x), Mathf.Abs(lossyScale.z)) * probeRadiusScale;
             var halfHeight = Mathf.Max(capsuleCollider.height * Mathf.Abs(lossyScale.y) * 0.5f, radius);
-            var center = bodyPosition + Vector3.Scale(capsuleCollider.center, lossyScale);
+            var center = bodyPosition + transform.TransformVector(capsuleCollider.center);
             var bottomHemisphereCenter = center + (Vector3.down * Mathf.Max(0f, halfHeight - radius));
             var castOrigin = bottomHemisphereCenter + (Vector3.up * (radius + probeStartOffset));
             var castDistance = Mathf.Max(0.01f, (halfHeight - radius) + probeDistance + probeStartOffset);

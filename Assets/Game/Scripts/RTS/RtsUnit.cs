@@ -562,7 +562,7 @@ namespace RorType.Gameplay.Rts
             infantryUpperBodyLayer = infantryAnimator.GetLayerIndex("Upper Body");
             if (infantryUpperBodyLayer >= 0)
             {
-                infantryAnimator.SetLayerWeight(infantryUpperBodyLayer, 1f);
+                infantryAnimator.SetLayerWeight(infantryUpperBodyLayer, 0f);
             }
 
             infantryMuzzle = ResolveInfantryMuzzle();
@@ -596,6 +596,13 @@ namespace RorType.Gameplay.Rts
                 infantryFireAnimationTimer > 0f ? 1f : 0f,
                 0.06f,
                 Time.deltaTime);
+            if (infantryUpperBodyLayer >= 0)
+            {
+                // The shared controller keeps locomotion on the base layer only.
+                var fireWeight = infantryAnimator.GetFloat(FireWeightParameter);
+                infantryAnimator.SetLayerWeight(
+                    infantryUpperBodyLayer, fireWeight < 0.001f ? 0f : fireWeight);
+            }
             infantryFireAnimationTimer = Mathf.Max(0f, infantryFireAnimationTimer - Time.deltaTime);
         }
 

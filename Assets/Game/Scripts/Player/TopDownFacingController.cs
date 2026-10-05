@@ -104,7 +104,7 @@ namespace RorType.Gameplay.Player
             standingFireActive = false;
             characterAnimator.CrossFadeInFixedTime(locomotionAnimationFullPathHash, 0.08f, 0);
             if (upperBodyAnimationLayerIndex >= 0)
-                characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
         }
 
         private void Awake()
@@ -130,16 +130,16 @@ namespace RorType.Gameplay.Player
             CacheAnimationHashes();
             if (EnsureCharacterAnimatorController())
             {
-                // Extract animation travel; CharacterRootMotion steers it on CHARACTER.
+                // CharacterRootMotion forwards animation travel to the physics motor.
                 characterAnimator.applyRootMotion = true;
                 characterAnimator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
                 characterAnimator.speed = animationSpeedMultiplier;
                 upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
                 if (upperBodyAnimationLayerIndex >= 0)
                 {
-                    // Fire Blend Tree uses the masked locomotion pose at FireWeight 0
-                    // and blends toward Fire at FireWeight 1.
-                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                    // Locomotion comes entirely from the base layer. The masked
+                    // upper-body layer contributes only while firing or fading out.
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
                 }
 
                 characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
@@ -257,11 +257,7 @@ namespace RorType.Gameplay.Player
 
         private Vector3 ResolveAimOrigin()
         {
-            var bodyCenter = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
-            // Direct root motion can move CHARACTER away from the gameplay collider.
-            return motor != null && motor.UsesDirectRootMotion && characterAnimator != null
-                ? characterAnimator.transform.position + (bodyCenter - transform.position)
-                : bodyCenter;
+            return capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
         }
 
         private void TryShoot()
@@ -381,8 +377,7 @@ namespace RorType.Gameplay.Player
                 characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
                 characterAnimator.SetFloat(fireAnimationWeightParameterHash, 1f);
 
-                // Restart the upper-body blend tree so every shot starts at the
-                // beginning of Fire while the base locomotion keeps running.
+                // Restart only the shot clip; the base locomotion phase keeps running.
                 characterAnimator.Play(
                     upperBodyFireBlendFullPathHash,
                     upperBodyAnimationLayerIndex,
@@ -431,6 +426,14 @@ namespace RorType.Gameplay.Player
                 targetFireWeight,
                 0.06f,
                 Time.deltaTime);
+            if (upperBodyAnimationLayerIndex >= 0)
+            {
+                // Fade back to the current base-layer pose, not a separately
+                // restarted copy of locomotion on the upper-body layer.
+                var fireWeight = characterAnimator.GetFloat(fireAnimationWeightParameterHash);
+                characterAnimator.SetLayerWeight(
+                    upperBodyAnimationLayerIndex, fireWeight < 0.001f ? 0f : fireWeight);
+            }
             fireAnimationTimer = Mathf.Max(0f, fireAnimationTimer - Time.deltaTime);
 
         }
@@ -543,7 +546,7 @@ namespace RorType.Gameplay.Player
 
                 if (upperBodyAnimationLayerIndex >= 0)
                 {
-                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
                     characterAnimator.Play(upperBodyFireBlendFullPathHash, upperBodyAnimationLayerIndex, 0f);
                 }
             }
@@ -680,7 +683,7 @@ namespace RorType.Gameplay.Player
                 upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
                 if (upperBodyAnimationLayerIndex >= 0)
                 {
-                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
                 }
             }
 

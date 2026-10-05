@@ -72,12 +72,12 @@ namespace RorType.Gameplay.Player
         private Rigidbody body;
         private Animator visualAnimator;
         private CapsuleCollider capsuleCollider;
-        private CapsuleCollider visualCapsuleCollider;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
         private PlayerResourceController resources;
         private Vector3 planarVelocity;
         private Vector3 externalPlanarVelocity;
+        private Vector3 pendingRootMotionDelta;
         private Vector3 dashDirection = Vector3.forward;
         private Vector3 jumpDirection = Vector3.forward;
         private Vector3 movementVisualScale = Vector3.one;
@@ -137,7 +137,6 @@ namespace RorType.Gameplay.Player
             resources = GetComponent<PlayerResourceController>();
             visualRoot = ResolveVisualRoot();
             visualAnimator = visualRoot != null ? visualRoot.GetComponent<Animator>() : null;
-            visualCapsuleCollider = visualRoot != null ? visualRoot.GetComponent<CapsuleCollider>() : null;
             CacheVisualBasePose();
             dashCharges = GetMaxDashCharges();
 
@@ -176,6 +175,9 @@ namespace RorType.Gameplay.Player
             TryStartJump();
             TryStartDash();
 
+            var rootMotionDelta = pendingRootMotionDelta;
+            pendingRootMotionDelta = Vector3.zero;
+
             if (isJumping || IsDashing)
             {
                 UpdateDistanceControlledMovement(Time.fixedDeltaTime);
@@ -197,10 +199,14 @@ namespace RorType.Gameplay.Player
 
             var controlFactor = isGroundedForLocomotion ? 1f : airControlPercent;
             var moveRate = targetPlanarVelocity.sqrMagnitude > 0.0001f ? acceleration : deceleration;
-            planarVelocity = Vector3.MoveTowards(
-                planarVelocity,
-                targetPlanarVelocity,
-                moveRate * controlFactor * Time.fixedDeltaTime);
+            // Consume animation displacement once per physics step, through the
+            // same ground snap and collision resolution as speed-driven movement.
+            planarVelocity = UsesDirectRootMotion
+                ? rootMotionDelta / Time.fixedDeltaTime
+                : Vector3.MoveTowards(
+                    planarVelocity,
+                    targetPlanarVelocity,
+                    moveRate * controlFactor * Time.fixedDeltaTime);
 
             externalPlanarVelocity = Vector3.MoveTowards(
                 externalPlanarVelocity,
@@ -214,7 +220,7 @@ namespace RorType.Gameplay.Player
 
             var combinedPlanarVelocity = planarVelocity + externalPlanarVelocity;
 
-            if (targetPlanarVelocity.sqrMagnitude > 0.0001f)
+            if (combinedPlanarVelocity.sqrMagnitude > 0.0001f)
             {
                 body.WakeUp();
             }
@@ -258,6 +264,25 @@ namespace RorType.Gameplay.Player
             movementReference = reference;
         }
 
+        public void QueueRootMotion(Vector3 animationDelta)
+        {
+            if (!isActiveAndEnabled || !UsesDirectRootMotion || isJumping || IsDashing)
+            {
+                return;
+            }
+
+            // The clip supplies distance, input supplies direction. Grounding and
+            // jumping own height; locomotion clips must never accumulate Y travel.
+            var direction = ResolvePlanarActionDirection(RequestedWorldMoveDirection);
+            var planarDistance = new Vector2(animationDelta.x, animationDelta.z).magnitude;
+            pendingRootMotionDelta += direction * planarDistance;
+        }
+
+        private void OnDisable()
+        {
+            pendingRootMotionDelta = Vector3.zero;
+        }
+
         public void ResetMotionState()
         {
             planarVelocity = Vector3.zero;
@@ -280,6 +305,7 @@ namespace RorType.Gameplay.Player
             isJumping = false;
             wasAirborne = false;
             externalPlanarVelocity = Vector3.zero;
+            pendingRootMotionDelta = Vector3.zero;
             movementVisualScale = Vector3.one;
             hasVisualPosition = false;
             if (visualRoot != null)
@@ -635,7 +661,7 @@ namespace RorType.Gameplay.Player
             var verticalScale = Mathf.Abs(scale.y);
             radius = Mathf.Max(0.01f, capsuleCollider.radius * planarScale);
             var height = Mathf.Max(radius * 2f, capsuleCollider.height * verticalScale);
-            var center = bodyPosition + Vector3.Scale(capsuleCollider.center, scale);
+            var center = bodyPosition + transform.TransformVector(capsuleCollider.center);
             var halfSegment = Mathf.Max(0f, (height * 0.5f) - radius);
             pointA = center + (Vector3.up * halfSegment);
             pointB = center - (Vector3.up * halfSegment);
@@ -660,9 +686,10 @@ namespace RorType.Gameplay.Player
 
             if (visualAnimator != null && visualAnimator.applyRootMotion)
             {
-                // Built-in root motion owns this transform. Do not pull the model
-                // back to the gameplay root after every animation evaluation.
-                smoothedVisualWorldPosition = visualRoot.position;
+                // The motor owns translation; Rigidbody interpolation already
+                // smooths the parent. Keep the model anchored to its collider.
+                smoothedVisualWorldPosition = transform.TransformPoint(visualBaseLocalPosition);
+                visualRoot.position = smoothedVisualWorldPosition;
                 hasVisualPosition = true;
                 return;
             }
@@ -925,18 +952,6 @@ namespace RorType.Gameplay.Player
                 knockbackDamping * deltaTime);
 
             var currentPosition = body.position;
-            // Root motion leaves the visual away from the parent Rigidbody.
-            // Query the dash capsule at CHARACTER without moving its animation
-            // displacement back onto the gameplay body.
-            var dashCollider = UsesDirectRootMotion && IsDashing && visualCapsuleCollider != null
-                && visualCapsuleCollider.enabled && visualCapsuleCollider.gameObject.activeInHierarchy
-                    ? visualCapsuleCollider
-                    : null;
-            var collisionOffset = dashCollider != null
-                ? dashCollider.transform.position - transform.position
-                : UsesDirectRootMotion && IsDashing && visualRoot != null
-                    ? visualRoot.position - transform.TransformPoint(visualBaseLocalPosition)
-                    : Vector3.zero;
             var plannedPlanarStep = Vector3.zero;
             var jumpStepDistance = 0f;
             var dashStepDistance = 0f;
@@ -960,7 +975,7 @@ namespace RorType.Gameplay.Player
             if (plannedPlanarStep.sqrMagnitude > 0.000001f)
             {
                 targetPosition = ResolveCollisionAwareGroundedPosition(
-                    currentPosition + collisionOffset, targetPosition + collisionOffset, dashCollider) - collisionOffset;
+                    currentPosition, targetPosition);
             }
 
             var actualPlanarStep = targetPosition - currentPosition;
@@ -1031,7 +1046,7 @@ namespace RorType.Gameplay.Player
 
             if (!isJumping)
             {
-                targetPosition = ResolvePenetrationFreePosition(targetPosition + collisionOffset, dashCollider) - collisionOffset;
+                targetPosition = ResolvePenetrationFreePosition(targetPosition);
             }
 
             body.velocity = Vector3.zero;

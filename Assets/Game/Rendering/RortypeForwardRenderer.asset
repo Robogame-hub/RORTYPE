@@ -81,17 +81,17 @@ MonoBehaviour:
   inputData:
     _value: 3
   lineHardness:
-    _value: 0.65
+    _value: 1
     _minValue: 0
     _maxValue: 1
   fade:
     _value: 0
   lineSizeMatchFactor:
-    _value: 0.1
+    _value: 1
     _minValue: 0
     _maxValue: 1
   globalLineSize:
-    _value: 0.5
+    _value: 0.38
     _minValue: 0
     _maxValue: 3
   depthLineSize:
@@ -99,7 +99,7 @@ MonoBehaviour:
     _minValue: 0
     _maxValue: 2
   normalLineSize:
-    _value: 1
+    _value: 2
     _minValue: 0
     _maxValue: 2
   depthFadeLimits:
@@ -118,7 +118,7 @@ MonoBehaviour:
     _minLimit: 0
     _maxLimit: 1
   lineColor:
-    _value: {r: 0.015, g: 0.02, b: 0.035, a: 0.9}
+    _value: {r: 0, g: 0, b: 0, a: 0.9}
     _useAlpha: 1
     _useHDR: 0
   overlayColor:
@@ -134,7 +134,7 @@ MonoBehaviour:
   normalsFarFade:
     _value: 20
   normalThreshold:
-    _minValue: 0.1
+    _minValue: 0
     _maxValue: 1
     _minLimit: 0
     _maxLimit: 1
