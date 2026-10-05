@@ -441,14 +441,18 @@ namespace RorType.Gameplay.Interaction
                 return false;
             }
 
-            var offset = resources.transform.position - transform.position;
+            var offset = GetTargetCollectPosition(resources) - transform.position;
             offset.y = 0f;
             return offset.sqrMagnitude <= magnetRadius * magnetRadius;
         }
 
         private static Vector3 GetTargetCollectPosition(PlayerResourceController resources)
         {
-            return resources.transform.position + Vector3.up * 0.8f;
+            // CHARACTER can travel independently of the resource-controller root.
+            // Use the same visible-player origin for magnet range and destination.
+            var motor = resources.GetComponent<TopDownPlayerMotor>();
+            var playerPosition = motor != null ? motor.RenderPosition : resources.transform.position;
+            return playerPosition + Vector3.up * 0.8f;
         }
 
         private void Collect(PlayerResourceController resources)

@@ -72,6 +72,7 @@ namespace RorType.Gameplay.Player
         private Rigidbody body;
         private Animator visualAnimator;
         private CapsuleCollider capsuleCollider;
+        private CapsuleCollider visualCapsuleCollider;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
         private PlayerResourceController resources;
@@ -136,6 +137,7 @@ namespace RorType.Gameplay.Player
             resources = GetComponent<PlayerResourceController>();
             visualRoot = ResolveVisualRoot();
             visualAnimator = visualRoot != null ? visualRoot.GetComponent<Animator>() : null;
+            visualCapsuleCollider = visualRoot != null ? visualRoot.GetComponent<CapsuleCollider>() : null;
             CacheVisualBasePose();
             dashCharges = GetMaxDashCharges();
 
@@ -395,7 +397,8 @@ namespace RorType.Gameplay.Player
             return targetPosition;
         }
 
-        private Vector3 ResolveCollisionAwareGroundedPosition(Vector3 currentPosition, Vector3 targetPosition)
+        private Vector3 ResolveCollisionAwareGroundedPosition(
+            Vector3 currentPosition, Vector3 targetPosition, CapsuleCollider queryCollider = null)
         {
             var movementDelta = targetPosition - currentPosition;
             var distance = movementDelta.magnitude;
@@ -405,12 +408,19 @@ namespace RorType.Gameplay.Player
             }
 
             var direction = movementDelta / distance;
-            if (!TryGetMovementBlocker(currentPosition, direction, distance + wallSkinWidth, out var hit))
+            if (IsDashing)
+            {
+                // Capsule casts do not report objects already touching/overlapping
+                // the character at the start of the dash step.
+                ApplyOverlappingDashImpacts(currentPosition, direction, queryCollider);
+            }
+
+            if (!TryGetMovementBlocker(currentPosition, direction, distance + wallSkinWidth, out var hit, queryCollider))
             {
                 return targetPosition;
             }
 
-            TryApplyDashImpact(hit, direction);
+            TryApplyDashImpact(hit.collider, hit.point, direction);
 
             var allowedDistance = Mathf.Max(0f, hit.distance - wallSkinWidth);
             var resolvedPosition = currentPosition + (direction * Mathf.Min(distance, allowedDistance));
@@ -418,14 +428,30 @@ namespace RorType.Gameplay.Player
             return resolvedPosition;
         }
 
-        private void TryApplyDashImpact(RaycastHit hit, Vector3 direction)
+        private void ApplyOverlappingDashImpacts(Vector3 position, Vector3 direction, CapsuleCollider queryCollider)
         {
-            if (!IsDashing || hit.collider == null)
+            GetCapsuleWorldPoints(position, out var pointA, out var pointB, out var radius, queryCollider);
+            var overlaps = Physics.OverlapCapsule(
+                pointA, pointB, radius, Physics.AllLayers, QueryTriggerInteraction.Ignore);
+            var center = (pointA + pointB) * 0.5f;
+            for (var i = 0; i < overlaps.Length; i++)
+            {
+                var candidate = overlaps[i];
+                if (candidate == null || candidate.transform.root == transform.root)
+                    continue;
+
+                TryApplyDashImpact(candidate, candidate.ClosestPoint(center), direction);
+            }
+        }
+
+        private void TryApplyDashImpact(Collider hitCollider, Vector3 hitPoint, Vector3 direction)
+        {
+            if (!IsDashing || hitCollider == null)
             {
                 return;
             }
 
-            if (!CombatUtility.TryGetDamageable(hit.collider, out var damageable, out var damageableComponent))
+            if (!CombatUtility.TryGetDamageable(hitCollider, out var damageable, out var damageableComponent))
             {
                 return;
             }
@@ -438,7 +464,7 @@ namespace RorType.Gameplay.Player
             // Destructible scenery breaks on contact, regardless of its remaining HP
             // or the separate damage value used against enemies.
             var impact = new CombatHitInfo(
-                dashImpactDamage, hit.point, direction, dashImpactImpulse, gameObject, CombatTeam.Player);
+                dashImpactDamage, hitPoint, direction, dashImpactImpulse, gameObject, CombatTeam.Player);
             if (damageableComponent is DestructibleCover cover)
             {
                 cover.DestroyImmediately(impact);
@@ -470,14 +496,16 @@ namespace RorType.Gameplay.Player
 
             damageable.ReceiveHit(new CombatHitInfo(
                 dashImpactDamage,
-                hit.point,
+                hitPoint,
                 direction,
                 dashImpactImpulse,
                 gameObject,
                 CombatTeam.Player));
         }
 
-        private bool TryGetMovementBlocker(Vector3 castPosition, Vector3 direction, float castDistance, out RaycastHit closestHit)
+        private bool TryGetMovementBlocker(
+            Vector3 castPosition, Vector3 direction, float castDistance, out RaycastHit closestHit,
+            CapsuleCollider queryCollider = null)
         {
             closestHit = default;
             if (capsuleCollider == null || castDistance <= 0f)
@@ -485,7 +513,7 @@ namespace RorType.Gameplay.Player
                 return false;
             }
 
-            GetCapsuleWorldPoints(castPosition, out var pointA, out var pointB, out var radius);
+            GetCapsuleWorldPoints(castPosition, out var pointA, out var pointB, out var radius, queryCollider);
             var hitCount = Physics.CapsuleCastNonAlloc(
                 pointA,
                 pointB,
@@ -525,14 +553,15 @@ namespace RorType.Gameplay.Player
             return foundHit;
         }
 
-        private Vector3 ResolvePenetrationFreePosition(Vector3 targetPosition)
+        private Vector3 ResolvePenetrationFreePosition(Vector3 targetPosition, CapsuleCollider queryCollider = null)
         {
             if (capsuleCollider == null)
             {
                 return targetPosition;
             }
 
-            GetCapsuleWorldPoints(targetPosition, out var pointA, out var pointB, out var radius);
+            var sourceCollider = queryCollider != null ? queryCollider : capsuleCollider;
+            GetCapsuleWorldPoints(targetPosition, out var pointA, out var pointB, out var radius, queryCollider);
             var boundsCenter = (pointA + pointB) * 0.5f;
             var overlapRadius = Vector3.Distance(pointA, pointB) * 0.5f + radius + wallSkinWidth;
             var hitCount = Physics.OverlapSphereNonAlloc(
@@ -553,11 +582,10 @@ namespace RorType.Gameplay.Player
                     continue;
                 }
 
-                GetCapsuleWorldPoints(resolvedPosition, out pointA, out pointB, out radius);
                 if (!Physics.ComputePenetration(
-                        capsuleCollider,
+                        sourceCollider,
                         resolvedPosition,
-                        transform.rotation,
+                        sourceCollider.transform.rotation,
                         candidate,
                         candidate.transform.position,
                         candidate.transform.rotation,
@@ -580,8 +608,28 @@ namespace RorType.Gameplay.Player
             return resolvedPosition;
         }
 
-        private void GetCapsuleWorldPoints(Vector3 bodyPosition, out Vector3 pointA, out Vector3 pointB, out float radius)
+        private void GetCapsuleWorldPoints(
+            Vector3 bodyPosition, out Vector3 pointA, out Vector3 pointB, out float radius,
+            CapsuleCollider queryCollider = null)
         {
+            if (queryCollider != null)
+            {
+                var queryTransform = queryCollider.transform;
+                var queryScale = queryTransform.lossyScale;
+                var axisIndex = queryCollider.direction;
+                var axis = axisIndex == 0 ? Vector3.right : axisIndex == 1 ? Vector3.up : Vector3.forward;
+                var axisScale = Mathf.Abs(queryScale[axisIndex]);
+                var radiusScale = Mathf.Max(
+                    Mathf.Abs(queryScale[(axisIndex + 1) % 3]), Mathf.Abs(queryScale[(axisIndex + 2) % 3]));
+                radius = Mathf.Max(0.01f, queryCollider.radius * radiusScale);
+                var queryHeight = Mathf.Max(radius * 2f, queryCollider.height * axisScale);
+                var queryCenter = bodyPosition + queryTransform.TransformVector(queryCollider.center);
+                var segment = queryTransform.TransformDirection(axis) * Mathf.Max(0f, queryHeight * 0.5f - radius);
+                pointA = queryCenter + segment;
+                pointB = queryCenter - segment;
+                return;
+            }
+
             var scale = transform.lossyScale;
             var planarScale = Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
             var verticalScale = Mathf.Abs(scale.y);
@@ -877,6 +925,18 @@ namespace RorType.Gameplay.Player
                 knockbackDamping * deltaTime);
 
             var currentPosition = body.position;
+            // Root motion leaves the visual away from the parent Rigidbody.
+            // Query the dash capsule at CHARACTER without moving its animation
+            // displacement back onto the gameplay body.
+            var dashCollider = UsesDirectRootMotion && IsDashing && visualCapsuleCollider != null
+                && visualCapsuleCollider.enabled && visualCapsuleCollider.gameObject.activeInHierarchy
+                    ? visualCapsuleCollider
+                    : null;
+            var collisionOffset = dashCollider != null
+                ? dashCollider.transform.position - transform.position
+                : UsesDirectRootMotion && IsDashing && visualRoot != null
+                    ? visualRoot.position - transform.TransformPoint(visualBaseLocalPosition)
+                    : Vector3.zero;
             var plannedPlanarStep = Vector3.zero;
             var jumpStepDistance = 0f;
             var dashStepDistance = 0f;
@@ -899,7 +959,8 @@ namespace RorType.Gameplay.Player
 
             if (plannedPlanarStep.sqrMagnitude > 0.000001f)
             {
-                targetPosition = ResolveCollisionAwareGroundedPosition(currentPosition, targetPosition);
+                targetPosition = ResolveCollisionAwareGroundedPosition(
+                    currentPosition + collisionOffset, targetPosition + collisionOffset, dashCollider) - collisionOffset;
             }
 
             var actualPlanarStep = targetPosition - currentPosition;
@@ -970,7 +1031,7 @@ namespace RorType.Gameplay.Player
 
             if (!isJumping)
             {
-                targetPosition = ResolvePenetrationFreePosition(targetPosition);
+                targetPosition = ResolvePenetrationFreePosition(targetPosition + collisionOffset, dashCollider) - collisionOffset;
             }
 
             body.velocity = Vector3.zero;

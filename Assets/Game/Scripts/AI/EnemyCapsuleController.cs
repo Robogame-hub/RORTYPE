@@ -152,6 +152,8 @@ namespace RorType.Gameplay.AI
 
         public CombatTeam Team => CombatTeam.Enemy;
         public bool IsAlive => !isDead;
+        public Vector3 VisionCenter => capsuleCollider != null ? capsuleCollider.bounds.center : transform.position + Vector3.up;
+        public static IReadOnlyList<EnemyCapsuleController> ActiveEnemyInstances => ActiveEnemies;
 
         private void Awake()
         {

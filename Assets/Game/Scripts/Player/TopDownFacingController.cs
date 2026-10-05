@@ -15,6 +15,7 @@ namespace RorType.Gameplay.Player
         [SerializeField] private Transform visualRoot;
         [SerializeField] private Transform feedbackTransform;
         [SerializeField] private Animator characterAnimator;
+        [SerializeField] private RuntimeAnimatorController characterAnimatorController;
         [SerializeField] private Transform projectileMuzzle;
 
         [Header("Aiming")]
@@ -83,6 +84,7 @@ namespace RorType.Gameplay.Player
         private bool hasFeedbackBasePose;
         private int upperBodyAnimationLayerIndex = -1;
         private int movementAnimationParameterHash;
+        private static readonly int MoveStrafeParameterHash = Animator.StringToHash("MoveStrafe");
         private int fireAnimationWeightParameterHash;
         private int locomotionAnimationFullPathHash;
         private int upperBodyFireBlendFullPathHash;
@@ -90,11 +92,11 @@ namespace RorType.Gameplay.Player
         private bool standingFireActive;
         private static readonly int StandingFireStateHash = Animator.StringToHash("Base Layer.Standing Fire");
 
-        private bool IsMovingForFire()
-        {
-            return (inputAdapter != null && inputAdapter.HasMovementInput)
-                || (motor != null && (motor.CurrentSpeed > 0.05f || motor.IsDashing));
-        }
+        public Vector3 CurrentAimDirection => currentAimDirection.sqrMagnitude > 0.0001f
+            ? currentAimDirection.normalized
+            : Vector3.forward;
+        public Vector3 AimOrigin => ResolveAimOrigin();
+        public Transform FacingVisualRoot => visualRoot != null ? visualRoot : transform;
 
         private void EndStandingFire()
         {
@@ -115,6 +117,7 @@ namespace RorType.Gameplay.Player
 
             groundProbe = GetComponent<TopDownGroundProbe>();
             characterAnimator = ResolveCharacterAnimator();
+            EnsureCharacterAnimatorController();
             if (characterAnimator != null && characterAnimator.runtimeAnimatorController != null)
             {
                 foreach (var clip in characterAnimator.runtimeAnimatorController.animationClips)
@@ -125,7 +128,7 @@ namespace RorType.Gameplay.Player
 
             projectileMuzzle = ResolveProjectileMuzzle();
             CacheAnimationHashes();
-            if (characterAnimator != null)
+            if (EnsureCharacterAnimatorController())
             {
                 // Extract animation travel; CharacterRootMotion steers it on CHARACTER.
                 characterAnimator.applyRootMotion = true;
@@ -140,6 +143,7 @@ namespace RorType.Gameplay.Player
                 }
 
                 characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
+                characterAnimator.SetFloat(MoveStrafeParameterHash, 0f);
                 characterAnimator.SetFloat(fireAnimationWeightParameterHash, 0f);
             }
 
@@ -287,15 +291,16 @@ namespace RorType.Gameplay.Player
         private void SpawnProjectile()
         {
             var spawnOrigin = ResolveProjectileSpawnOrigin();
+            var shotDirection = ResolveProjectileDirection(spawnOrigin);
             PlayerWeaponVfx.Spawn(muzzleFlashPrefab, projectileMuzzle != null ? projectileMuzzle.position : spawnOrigin,
-                Quaternion.LookRotation(currentAimDirection), muzzleFlashScale, projectileMuzzle, 0.25f);
+                Quaternion.LookRotation(shotDirection, Vector3.up), muzzleFlashScale, projectileMuzzle, 0.25f);
             var effectiveProjectileLifetime = ResolveProjectileLifetime(projectileSpeed, projectileLifetime, projectileMaxDistance);
 
             var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             projectile.name = "PlayerProjectile";
             projectile.transform.SetPositionAndRotation(
                 spawnOrigin,
-                Quaternion.LookRotation(currentAimDirection, Vector3.up));
+                Quaternion.LookRotation(shotDirection, Vector3.up));
             projectile.transform.localScale = Vector3.one * (projectileRadius * 2f);
 
             var projectileCollider = projectile.GetComponent<SphereCollider>();
@@ -319,7 +324,7 @@ namespace RorType.Gameplay.Player
             IgnorePlayerCollisions(projectileCollider);
 
             projectileSphere.Initialize(
-                currentAimDirection,
+                shotDirection,
                 projectileSpeed,
                 effectiveProjectileLifetime,
                 projectileStretchMultiplier,
@@ -332,6 +337,23 @@ namespace RorType.Gameplay.Player
 
             projectileSphere.ConfigureBolterEffects(environmentImpactPrefab, impactScale, boltTrailMaterial);
             TriggerBounce();
+        }
+
+        private Vector3 ResolveProjectileDirection(Vector3 spawnOrigin)
+        {
+            if (TryGetAimPoint(out var aimPoint))
+            {
+                var directionToAim = aimPoint - spawnOrigin;
+                directionToAim.y = 0f;
+                if (directionToAim.sqrMagnitude > 0.0001f)
+                {
+                    return directionToAim.normalized;
+                }
+            }
+
+            return currentAimDirection.sqrMagnitude > 0.0001f
+                ? currentAimDirection.normalized
+                : Vector3.forward;
         }
 
         private Vector3 ResolveProjectileSpawnOrigin()
@@ -347,39 +369,35 @@ namespace RorType.Gameplay.Player
 
         private void TriggerFireAnimation()
         {
-            if (!animateCharacter || characterAnimator == null)
+            if (!animateCharacter || !EnsureCharacterAnimatorController())
             {
                 return;
             }
 
             fireAnimationTimer = ResolveShotCycle();
-            if (!IsMovingForFire())
-            {
-                standingFireActive = true;
-                characterAnimator.Play(StandingFireStateHash, 0, 0f);
-                if (upperBodyAnimationLayerIndex >= 0)
-                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 0f);
-            }
-            else
-            {
-                EndStandingFire();
-            }
-            characterAnimator.SetFloat(fireAnimationWeightParameterHash, 1f);
-
             if (upperBodyAnimationLayerIndex >= 0)
             {
+                EndStandingFire();
+                characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                characterAnimator.SetFloat(fireAnimationWeightParameterHash, 1f);
+
                 // Restart the upper-body blend tree so every shot starts at the
                 // beginning of Fire while the base locomotion keeps running.
                 characterAnimator.Play(
                     upperBodyFireBlendFullPathHash,
                     upperBodyAnimationLayerIndex,
                     0f);
+
+                return;
             }
+
+            standingFireActive = true;
+            characterAnimator.Play(StandingFireStateHash, 0, 0f);
         }
 
         private void UpdateCharacterAnimation()
         {
-            if (!animateCharacter || characterAnimator == null || !characterAnimator.isActiveAndEnabled)
+            if (!animateCharacter || !EnsureCharacterAnimatorController() || !characterAnimator.isActiveAndEnabled)
             {
                 return;
             }
@@ -395,10 +413,15 @@ namespace RorType.Gameplay.Player
             if (standingFireActive && (isMoving || fireAnimationTimer <= 0f))
                 EndStandingFire();
 
-            var targetMoveSpeed = ResolveMovementAnimationValue(isMoving);
+            var targetMovement = ResolveMovementAnimationValues(isMoving);
             characterAnimator.SetFloat(
                 movementAnimationParameterHash,
-                targetMoveSpeed,
+                targetMovement.y,
+                movementBlendDamping,
+                Time.deltaTime);
+            characterAnimator.SetFloat(
+                MoveStrafeParameterHash,
+                targetMovement.x,
                 movementBlendDamping,
                 Time.deltaTime);
 
@@ -412,11 +435,11 @@ namespace RorType.Gameplay.Player
 
         }
 
-        private float ResolveMovementAnimationValue(bool isMoving)
+        private Vector2 ResolveMovementAnimationValues(bool isMoving)
         {
             if (!isMoving)
             {
-                return 0f;
+                return Vector2.zero;
             }
 
             var movementDirection = motor != null
@@ -424,30 +447,35 @@ namespace RorType.Gameplay.Player
                 : Vector3.zero;
             movementDirection.y = 0f;
 
-            // A negative value selects the backwards-running branch of the
-            // locomotion blend tree whenever movement opposes cursor aim.
-            var directionSign = movementDirection.sqrMagnitude > 0.0001f
-                && Vector3.Dot(movementDirection.normalized, currentAimDirection) < 0f
-                    ? -1f
-                    : 1f;
-
-            if (motor == null || motor.WalkSpeed <= 0.01f)
+            if (movementDirection.sqrMagnitude <= 0.0001f)
             {
-                return directionSign;
+                return Vector2.zero;
             }
 
-            var maximumSpeedRatio = Mathf.Max(1f, motor.SprintSpeed / motor.WalkSpeed);
-            var actualSpeedRatio = Mathf.Clamp(
-                motor.CurrentSpeed / motor.WalkSpeed,
-                0f,
-                maximumSpeedRatio);
+            // Use the body's current facing, including its turn toward the cursor,
+            // so sideways input selects the matching left/right step cycle.
+            var forward = visualRoot != null ? visualRoot.forward : transform.forward;
+            forward.y = 0f;
+            forward.Normalize();
+            var right = Vector3.Cross(Vector3.up, forward);
+            var direction = movementDirection.normalized;
+            var localMovement = new Vector2(
+                Vector3.Dot(direction, right),
+                Vector3.Dot(direction, forward));
 
-            return directionSign * actualSpeedRatio;
+            var speedRatio = 1f;
+            if (motor != null && motor.WalkSpeed > 0.01f)
+            {
+                var maximumSpeedRatio = Mathf.Max(1f, motor.SprintSpeed / motor.WalkSpeed);
+                speedRatio = Mathf.Clamp(motor.CurrentSpeed / motor.WalkSpeed, 0f, maximumSpeedRatio);
+            }
+
+            return localMovement * speedRatio;
         }
 
         private float ResolveShotCycle()
         {
-            if (!animateCharacter || characterAnimator == null || upperBodyAnimationLayerIndex < 0)
+            if (!animateCharacter || !EnsureCharacterAnimatorController() || upperBodyAnimationLayerIndex < 0)
                 return Mathf.Max(shotInterval, fireAnimationDuration);
             var state = characterAnimator.GetCurrentAnimatorStateInfo(upperBodyAnimationLayerIndex);
             var playback = Mathf.Max(0.01f, characterAnimator.speed * Mathf.Abs(state.speed * state.speedMultiplier));
@@ -504,9 +532,10 @@ namespace RorType.Gameplay.Player
             shotCooldownTimer = 0f;
             shotQueued = false;
 
-            if (characterAnimator != null)
+            if (EnsureCharacterAnimatorController())
             {
                 characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
+                characterAnimator.SetFloat(MoveStrafeParameterHash, 0f);
                 characterAnimator.SetFloat(fireAnimationWeightParameterHash, 0f);
                 fireAnimationTimer = 0f;
 
@@ -636,6 +665,26 @@ namespace RorType.Gameplay.Player
             }
 
             return GetComponentInChildren<Animator>(true);
+        }
+
+        private bool EnsureCharacterAnimatorController()
+        {
+            if (characterAnimator == null)
+            {
+                return false;
+            }
+
+            if (characterAnimator.runtimeAnimatorController == null && characterAnimatorController != null)
+            {
+                characterAnimator.runtimeAnimatorController = characterAnimatorController;
+                upperBodyAnimationLayerIndex = characterAnimator.GetLayerIndex(upperBodyAnimationLayer);
+                if (upperBodyAnimationLayerIndex >= 0)
+                {
+                    characterAnimator.SetLayerWeight(upperBodyAnimationLayerIndex, 1f);
+                }
+            }
+
+            return characterAnimator.runtimeAnimatorController != null;
         }
 
         private Transform ResolveVisualRoot()

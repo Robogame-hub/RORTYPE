@@ -22,6 +22,7 @@ GameObject:
   - component: {fileID: 460000016}
   - component: {fileID: 460000018}
   - component: {fileID: 460000019}
+  - component: {fileID: 460000021}
   m_Layer: 0
   m_Name: TopDownPlayer
   m_TagString: Untagged
@@ -406,6 +407,40 @@ MonoBehaviour:
   sprintDrainPerSecond: 10
   staminaRegenPerSecond: 35
   staminaRegenDelay: 0.45
+--- !u!114 &460000021
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 460000001}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4f0d6c73c2d94e8fb1a71ce0306b7f64, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::RorType.Gameplay.Player.PlayerVisionFogOfWar
+  viewDistance: 22
+  viewAngle: 85
+  eyeHeight: 1.1
+  closeRevealRadius: 0.85
+  visibilityRefreshInterval: 0.05
+  visibilityGraceTime: 0.12
+  occlusionMask:
+    serializedVersion: 2
+    m_Bits: 0
+  hideEnemiesOutsideCone: 0
+  useVisionConeVisual: 0
+  drawFogVisuals: 0
+  fogRadius: 36
+  playerClearRadius: 0.75
+  overlayHeightOffset: 0.08
+  meshSegments: 128
+  fogColor: {r: 0.006, g: 0.008, b: 0.012, a: 0.82}
+  drawFogEdgeEffect: 0
+  fogEdgeWidth: 9
+  fogDriftDegreesPerSecond: 7
+  fogPulseStrength: 0.16
+  visionHighlightColor: {r: 0.35, g: 0.46, b: 0.55, a: 0.24}
 --- !u!1 &460000012
 GameObject:
   m_ObjectHideFlags: 0

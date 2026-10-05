@@ -745,5 +745,87 @@
 - CharacterRootMotion is now authored on CHARACTER's Animator. With zero motor speeds, OnAnimatorMove applies the extracted planar travel length directly to CHARACTER along normalized, camera-relative WASD. It does not transfer displacement to the Rigidbody or apply animation rotation. No input means no displacement. Standalone CHARACTER retains ApplyBuiltinRootMotion; nonzero motor speeds and dash leave travel to the motor.
 - This supersedes the September 17 callback-free implementation: directional steering of extracted root motion is required to retain cursor-facing with the existing single Run clip. Movement distance still comes from animation. The parent gameplay collider remains unsynchronized as in the previously accepted scope.
 - Facing uses requested input direction for the signed MoveSpeed at zero motor speed and aims from the moving CHARACTER position. Input executes before facing; animation parameters are set in Update, and CHARACTER's Animator uses Normal update mode.
-- Locomotion thresholds are restored to -1.5/-1/0/1/1.5 with reverse Run at -4, Idle, and forward Run at +4. Dedicated sideways animation clips are still absent; sideways movement uses Run.
+- Locomotion thresholds are restored to -1.5/-1/0/1/1.5 with reverse Run at -4, Idle, and forward Run at +4. At this point sideways movement still used Run; the later strafe integration below supersedes the earlier claim that dedicated clips were absent.
 - Static prefab/GUID/clip-reference checks and source review completed. Unity import and Play Mode verification remain pending.
+
+## 2026-09-20 left/right step animation integration
+- The updated CHARACTER.fbx contains CHIBI_RIG|Walk_Left and CHIBI_RIG|Walk_Right; the earlier absence claim was outdated. Both takes are now included in ModelImporter.clipAnimations, using their full 0-36 frame range at 24 fps, Loop Time and Loop Pose. Their CTRL_root curves contain lateral travel.
+- Locomotion is now a 2D Freeform Directional blend tree: MoveStrafe is local right/left, MoveSpeed is local forward/backward. Idle remains at the origin; Run/reverse Run and the new step clips have walk/sprint samples at radii 1/1.5 with the existing 4x playback convention. Diagonals blend the corresponding directional cycles.
+- TopDownFacingController computes both parameters against the visual body's current planar facing after cursor turning. Direct root motion uses requested camera-relative WASD; nonzero-speed motor movement uses resolved velocity. Both parameters are cleared on initialization and feedback reset.
+- The same locomotion tree remains the masked Fire overlay's reference motion. Standing Fire, cursor-facing, CharacterRootMotion steering and the intentionally zero DESANTGAME motor speeds are unchanged. Existing user edits to the FBX and its other importer settings are preserved.
+- Static YAML, clip-reference and diff checks completed. Unity import, playback, diagonal speed and visual step timing still require Play Mode review.
+
+## 2026-09-20 destructible size and dash-contact correction
+- User requested larger destructible targets, excluding trees and barrels; barrel redesign is deferred. DestructibleCrate is now 4 x 4 x 4m (was 2m per side); DestructibleCover is 6 x 4 x 1.2m (was 4 x 2 x 0.6m), measured at unit root scale.
+- Authored child block positions/scales enlarge both meshes and BoxColliders, retaining ground-level pivots, existing root transforms, debris counts, health and loot. Scene instances with root-scale overrides still inherit this geometry; Jagernauts requires no scene edit. Both barrel prefabs and tree prefabs remain unchanged.
+- The earlier claim that dash destruction already worked did not account for direct root motion displacing CHARACTER away from the motor's collision-query origin. Dash capsule casts and penetration checks now use the visual displacement offset, then convert the result back to the parent's movement coordinates. Ordinary animation travel remains on CHARACTER and zero motor speeds are preserved.
+- Dash contact also checks capsule overlaps before sweeping, so starting inside/touching a destructible reaches the existing DestroyImmediately path instead of relying on a cast that misses initial overlaps. Enemy hit deduplication and existing destruction/loot/barrel rules are preserved.
+- Current DESANTGAME TopDownPlayer has a disabled root CapsuleCollider and an enabled identical capsule on CHARACTER (height 2.9246235, radius 0.7493439). Direct-root-motion dash queries now use this enabled CHARACTER capsule including its rotated center and scaled shape; players without an active visual capsule fall back to translated root-capsule geometry.
+- Prefab YAML/geometry/reference checks and source review completed; Unity import and Play Mode verification remain pending. Review shooting, dash from a distance after walking away from spawn, and dash while already touching the target.
+
+## 2026-09-20 resource pickup root-motion correction
+- Ammo/health pickup magnet range and destination still used PlayerResourceController.transform.position, left behind by direct CHARACTER root motion. Thus moving the visible player near a drop did not bring the magnet into range; earlier pickup implementation notes did not account for this separation.
+- ResourcePickupCollectible now uses TopDownPlayerMotor.RenderPosition plus the existing 0.8m collection-height offset for both magnet range and destination. Players without a motor retain the resource-controller position fallback. This shared correction applies to ammo, health and gold pickups.
+- Existing collider-trigger collection, 2m magnet radius, pickup amounts, resource caps and character/root-motion setup are preserved. The magnet can complete collection by distance even when a trigger callback is missed.
+- Static source/diff checks completed; Unity playback remains unverified. Check ammo after firing and health after taking damage, away from the player's initial spawn position.
+
+## 2026-09-21 shooting animation clip mapping and blend cleanup
+- User reported shooting playing the wrong animation and firing animation appearing when movement starts.
+- Current CHARACTER.fbx contains CHIBI_RIG|Fire and CHIBI_RIG|Run, but CHARACTER.fbx.meta had the controller-referenced clip IDs remapped incorrectly: the fire fileID pointed to Reload, and the locomotion Run fileID pointed to Fire.
+- CHARACTER.fbx.meta now maps controller fileID -3487248284958460285 to CHIBI_RIG|Fire (0-14 frames, one-shot) and fileID -2644065905296768561 to CHIBI_RIG|Run (0-106 frames, looped). The existing AnimatorController references are preserved.
+- TopDownFacingController no longer disables the Upper Body layer for standing shots when that layer exists. Base Layer remains locomotion/idle, and shots restart the masked Upper Body Fire Overlay for both standing and moving. Base Layer Standing Fire remains only as fallback when the upper-body layer is unavailable.
+- Static rg and git diff --check were run on the touched files. Unity import and Play Mode verification remain pending.
+
+## 2026-09-21 muzzle-to-reticle projectile aiming
+- Regular bolter shots resolve their horizontal flight direction from the post-animation Muzzle world position toward the XZ position under the mouse reticle. The vertical component is removed so bolts always travel parallel to the ground at muzzle height instead of pitching into the floor.
+- Character facing still uses the body-center-to-reticle planar direction, while projectile rotation, velocity and muzzle-flash rotation share the separate horizontal Muzzle-to-reticle direction. This removes the lateral offset without introducing vertical aim.
+- If no camera aim point can be resolved, shooting retains the existing currentAimDirection fallback. Static source and diff checks passed; Play Mode verification remains pending.
+
+## 2026-09-21 locomotion playback speed restoration
+- The 2D locomotion conversion had reduced Run and ordinary strafe playback from the accepted 4x convention to 1.5x, which also reduced direct-root-motion travel speed.
+- All moving samples now use 4x playback: forward Run 4, reverse Run -4, Walk_Left 4 and Walk_Right 4. Idle and Fire remain at 1x, so restoring movement speed does not accelerate standing or shooting animations.
+- This corrects the implementation/documentation mismatch introduced by the 2D blend-tree edit. Unity playback remains pending.
+
+## 2026-09-21 runtime Animator controller recovery
+- After the Animator Controller was reimported during Play Mode, Editor.log reported `Animator does not have an AnimatorController` from TopDownFacingController.TriggerFireAnimation. The active model then remained in a static fire-like pose and animation Play calls failed.
+- TopDownFacingController now has a serialized characterAnimatorController fallback. The DESANTGAME TopDownPlayer prefab references New Animator Controller, and the component restores a missing runtimeAnimatorController before initialization, animation updates, shot-cycle timing, fire playback and feedback reset.
+- If neither the active Animator nor the serialized fallback has a controller, animation calls are skipped while projectile spawning remains functional. Animator state string fields in the controller YAML are restored to explicit empty strings.
+- Static reference and diff checks passed. The active Play Mode session must be restarted/reloaded to validate controller recovery and fire playback.
+
+## 2026-09-21 fog-of-war vision cone
+- `PlayerVisionFogOfWar` is authored on both `Assets/Game/DESANTGAME/PREFAB/TopDownPlayer.prefab` and the older `Assets/Game/Prefabs/Player/TopDownPlayer.prefab`.
+- Vision follows `TopDownPlayerMotor.RenderPosition`, so the cone and fog stay on the visible `CHARACTER` when direct root motion moves it away from the gameplay root.
+- Enemies are hidden outside the player's forward cone through runtime `EnemyVisionTarget` components. Defaults: 22m view distance, 85 degree cone, 0.85m close reveal radius, 0.12s visibility grace, and no occlusion mask unless explicitly configured.
+- The fog presentation is a runtime transparent world-space mesh: dark local fog around the player plus a bluish cone highlight for the visible area. This is a local visibility/fog prototype, not persistent explored-map memory.
+- `EnemyCapsuleController` exposes read-only active enemy access and `VisionCenter` for the vision system; enemy AI/combat remains active while enemies are visually hidden.
+- Static reference checks and `git diff --check` passed on touched files. Unity import and Play Mode visibility tuning remain pending.
+
+## 2026-09-21 fog inversion correction and cone defer
+- User reported the fog was visually inverted: the visible cone looked dark while the fogged area looked light.
+- Current accepted temporary behavior disables cone gating by default: `hideEnemiesOutsideCone = false` and `useVisionConeVisual = false` on both TopDownPlayer prefabs. Enemy visibility is restored while the cone is deferred for later implementation.
+- The runtime fog mesh now darkens the area outside the radial `viewDistance` only; the visible area remains clear.
+- The former filled bluish cone highlight is replaced by a soft animated fog-edge ring at the visibility boundary (`drawFogEdgeEffect`, `fogEdgeWidth`, drift and pulse settings). This adds atmosphere without darkening the visible area.
+
+## 2026-09-21 fog edge scale tuning
+- User liked the fog-edge effect but reported it ended too early past the boundary and its shapes were too large.
+- The default/prefab `fogEdgeWidth` is now 9m and is biased outward into the fog, with only a small 1.2m inward feather into the visible radius.
+- Edge mesh resolution is now 128 segments, and the procedural wave frequencies are much higher with lower radial amplitude, making the effect finer while extending farther into the dark fog.
+
+## 2026-09-21 fog-of-war disabled
+- User rejected the fog-of-war presentation and requested that it be disabled.
+- `PlayerVisionFogOfWar` remains in source and on both TopDownPlayer prefabs as dormant setup, but the component is disabled on both prefabs.
+- `drawFogVisuals` and `drawFogEdgeEffect` are false on both prefabs and in the script defaults, while enemy cone hiding remains off.
+
+## 2026-09-22 RTS prototype scene
+- `Assets/Game/Scene/RtsPrototype.unity` is a separate RTS testing scene. It was copied from `Jagernauts` only to retain the Directional Light, Grimdark Global Volume, and Rain-Sparks setup; its gameplay area is a new flat 100 x 100m field with no terrain.
+- The field follows the supplied layout: player and enemy bases, two neutral tank factories, two neutral air factories, and three neutral barracks. There are nine capturable facilities in total.
+- Runtime ownership is isolated under `Assets/Game/Scripts/RTS/`: `RtsUnit` handles movement, combat range, ammo, targets and damage; `RtsFacility` owns capture and non-combat ammo refill; `RtsAbility` / `RtsGrenadeAbility` provide the expandable infantry ability seam; selection, camera, HUD and primitive vehicle presentation each have dedicated components.
+- Prototype controls: click a player unit to select, drag LMB to box-select, single LMB on terrain for forced movement, double LMB for assault movement, Ctrl+A selects all player units, Ctrl+number assigns a control group, number recalls it, Q or the selected infantry HUD button uses its grenade. Middle-mouse drag rotates the RTS camera; scroll zooms.
+- Initial RTS actors are a primitive tank with independently rotating turret/tracks, a primitive helicopter that keeps a standoff while strafing, two infantry based on the existing CHARACTER prefab, and three targets using the existing `Assets/Game/DESANTGAME/DESIGN/Model/ORK.fbx` model.
+- Unity batch validation opened the scene without compile errors and confirmed 7 `RtsUnit` instances, 9 `RtsFacility` instances, camera and selection controller. Visual/play-mode tuning remains a user review step.
+- RTS selection now keeps an explicit scene reference to the RTS camera and resolves units with direct physics raycasts before interpreting terrain commands, replacing the previous implicit camera lookup.
+- The `CHARACTER.prefab` used for RTS infantry contains inherited smoke particle prefabs intended for another mode. `RtsUnit` disables those particles and the infantry-only selection marker at runtime without changing the shared character prefab.
+- RTS targets now use the existing `Assets/Game/DESANTGAME/DESIGN/Model/ORK.fbx` model; the earlier character-mesh targets with the Orc material are disabled in this scene. RTS camera rotation uses lower pixel sensitivity and smoothing.
+- RTS infantry now uses the same `New Animator Controller`, `Bolter` socket, muzzle flash, bolt trail, and impact prefabs as Jagernauts. `RtsUnit` drives `MoveSpeed`, `MoveStrafe`, and the masked `Upper Body.Fire Overlay`; its projectile starts at the actual Bolter transform and applies damage on impact rather than using the generic instant tracer.
+- `CharacterRootMotion` detects an `RtsUnit` parent and passes extracted root-motion distance to that unit, which keeps RTS orders authoritative for direction and stopping distance. Its existing TopDownPlayer and standalone-character branches are unchanged.
+- RTS movement now sends multi-unit terrain orders to spaced formation slots and uses deterministic local separation/side-steering between active units. Infantry feeds the steered direction into root motion; tanks and helicopters use it in their ordinary movement, so units no longer converge into one point or pass through one another.

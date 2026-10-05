@@ -1,3 +1,4 @@
+using RorType.Gameplay.Rts;
 using UnityEngine;
 
 namespace RorType.Gameplay.Player
@@ -7,15 +8,23 @@ namespace RorType.Gameplay.Player
     {
         private Animator characterAnimator;
         private TopDownPlayerMotor motor;
+        private RtsUnit rtsUnit;
 
         private void Awake()
         {
             characterAnimator = GetComponent<Animator>();
             motor = GetComponentInParent<TopDownPlayerMotor>();
+            rtsUnit = GetComponentInParent<RtsUnit>();
         }
 
         private void OnAnimatorMove()
         {
+            if (rtsUnit != null)
+            {
+                rtsUnit.ApplyInfantryRootMotion(characterAnimator.deltaPosition);
+                return;
+            }
+
             if (motor == null)
             {
                 characterAnimator.ApplyBuiltinRootMotion();

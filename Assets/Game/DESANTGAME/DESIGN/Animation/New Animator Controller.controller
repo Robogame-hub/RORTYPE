@@ -62,6 +62,12 @@ AnimatorController:
     m_DefaultInt: 0
     m_DefaultBool: 0
     m_Controller: {fileID: 9100000}
+  - m_Name: MoveStrafe
+    m_Type: 1
+    m_DefaultFloat: 0
+    m_DefaultInt: 0
+    m_DefaultBool: 0
+    m_Controller: {fileID: 9100000}
   - m_Name: FireWeight
     m_Type: 1
     m_DefaultFloat: 0
@@ -104,16 +110,16 @@ BlendTree:
   - serializedVersion: 2
     m_Motion: {fileID: -2644065905296768561, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
     m_Threshold: -1.5
-    m_Position: {x: 0, y: 0}
-    m_TimeScale: -4
+    m_Position: {x: 0, y: -1.5}
+    m_TimeScale: -1
     m_CycleOffset: 1
     m_DirectBlendParameter: 
     m_Mirror: 0
   - serializedVersion: 2
     m_Motion: {fileID: -2644065905296768561, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
     m_Threshold: -1
-    m_Position: {x: 0, y: 0}
-    m_TimeScale: -4
+    m_Position: {x: 0, y: -1}
+    m_TimeScale: -1
     m_CycleOffset: 1
     m_DirectBlendParameter: 
     m_Mirror: 0
@@ -128,26 +134,58 @@ BlendTree:
   - serializedVersion: 2
     m_Motion: {fileID: -2644065905296768561, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
     m_Threshold: 1
-    m_Position: {x: 0, y: 0}
-    m_TimeScale: 4
+    m_Position: {x: 0, y: 1}
+    m_TimeScale: 1
     m_CycleOffset: 0
     m_DirectBlendParameter: 
     m_Mirror: 0
   - serializedVersion: 2
     m_Motion: {fileID: -2644065905296768561, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
     m_Threshold: 1.5
-    m_Position: {x: 0, y: 0}
-    m_TimeScale: 4
+    m_Position: {x: 0, y: 1.5}
+    m_TimeScale: 2
     m_CycleOffset: 0
     m_DirectBlendParameter: 
     m_Mirror: 0
-  m_BlendParameter: MoveSpeed
-  m_BlendParameterY: 
+  - serializedVersion: 2
+    m_Motion: {fileID: 740000000000000001, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
+    m_Threshold: 0
+    m_Position: {x: -1, y: 0}
+    m_TimeScale: 3
+    m_CycleOffset: 0
+    m_DirectBlendParameter: 
+    m_Mirror: 0
+  - serializedVersion: 2
+    m_Motion: {fileID: 740000000000000001, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
+    m_Threshold: 0
+    m_Position: {x: -1.5, y: 0}
+    m_TimeScale: 3
+    m_CycleOffset: 0
+    m_DirectBlendParameter: 
+    m_Mirror: 0
+  - serializedVersion: 2
+    m_Motion: {fileID: 740000000000000002, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
+    m_Threshold: 0
+    m_Position: {x: 1, y: 0}
+    m_TimeScale: 3
+    m_CycleOffset: 0
+    m_DirectBlendParameter: 
+    m_Mirror: 0
+  - serializedVersion: 2
+    m_Motion: {fileID: 740000000000000002, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
+    m_Threshold: 0
+    m_Position: {x: 1.5, y: 0}
+    m_TimeScale: 3
+    m_CycleOffset: 0
+    m_DirectBlendParameter: 
+    m_Mirror: 0
+  m_BlendParameter: MoveStrafe
+  m_BlendParameterY: MoveSpeed
   m_MinThreshold: -1.5
   m_MaxThreshold: 1.5
   m_UseAutomaticThresholds: 0
   m_NormalizedBlendValues: 0
-  m_BlendType: 0
+  m_BlendType: 2
 --- !u!206 &20600001
 BlendTree:
   m_ObjectHideFlags: 1
@@ -200,11 +238,11 @@ AnimatorState:
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
   m_Motion: {fileID: 20600000}
-  m_Tag: ""
-  m_SpeedParameter: ""
-  m_MirrorParameter: ""
-  m_CycleOffsetParameter: ""
-  m_TimeParameter: ""
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
 --- !u!1102 &1468545231987418752
 AnimatorState:
   serializedVersion: 6
@@ -226,11 +264,11 @@ AnimatorState:
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
   m_Motion: {fileID: 20600001}
-  m_Tag: ""
-  m_SpeedParameter: ""
-  m_MirrorParameter: ""
-  m_CycleOffsetParameter: ""
-  m_TimeParameter: ""
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
 --- !u!1102 &1468545231987418753
 AnimatorState:
   serializedVersion: 6
@@ -252,8 +290,8 @@ AnimatorState:
   m_CycleOffsetParameterActive: 0
   m_TimeParameterActive: 0
   m_Motion: {fileID: -3487248284958460285, guid: 3763543d4c5f1ed4cb9f7341513ad85b, type: 3}
-  m_Tag: ""
-  m_SpeedParameter: ""
-  m_MirrorParameter: ""
-  m_CycleOffsetParameter: ""
-  m_TimeParameter: ""
+  m_Tag: 
+  m_SpeedParameter: 
+  m_MirrorParameter: 
+  m_CycleOffsetParameter: 
+  m_TimeParameter: 
