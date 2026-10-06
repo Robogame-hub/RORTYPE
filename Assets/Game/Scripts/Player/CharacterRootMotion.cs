@@ -31,8 +31,8 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            // The motor applies animation travel to the physics body in FixedUpdate.
-            // Moving the visual here bypasses wall casts and accumulates clip Y drift.
+            // Clip Y motion is baked into the skeleton pose at import, preserving
+            // the authored bounce. The motor applies planar travel with collisions.
             motor.QueueRootMotion(characterAnimator.deltaPosition);
         }
     }

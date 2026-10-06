@@ -113,6 +113,7 @@ MonoBehaviour:
   cursorLookAheadDistance: 9
   cursorLookAheadSharpness: 9
   cursorLookAheadLag: 0.28
+  rotationSensitivity: 3
 --- !u!114 &8171615094965187118
 MonoBehaviour:
   m_ObjectHideFlags: 0

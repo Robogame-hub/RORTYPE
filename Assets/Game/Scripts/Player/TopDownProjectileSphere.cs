@@ -9,26 +9,12 @@ namespace RorType.Gameplay.Player
     {
         private GameObject environmentImpactPrefab;
         private float environmentImpactScale;
-        private TrailRenderer boltTrail;
+        [SerializeField] private TrailRenderer boltTrail;
 
-        public void ConfigureBolterEffects(GameObject impactPrefab, float impactScale, Material trailMaterial)
+        public void ConfigureBolterEffects(GameObject impactPrefab, float impactScale)
         {
             environmentImpactPrefab = impactPrefab;
             environmentImpactScale = impactScale;
-            if (trailMaterial == null) return;
-            var trailObject = new GameObject("Bolt trail");
-            trailObject.transform.SetPositionAndRotation(transform.position, Quaternion.identity);
-            trailObject.transform.SetParent(transform, true);
-            boltTrail = trailObject.AddComponent<TrailRenderer>();
-            boltTrail.sharedMaterial = trailMaterial;
-            boltTrail.time = 0.12f;
-            boltTrail.minVertexDistance = 0.04f;
-            boltTrail.startWidth = 0.055f;
-            boltTrail.endWidth = 0f;
-            boltTrail.startColor = new Color(3f, 1.3f, 0.35f, 1f);
-            boltTrail.endColor = new Color(1f, 0.2f, 0.02f, 0f);
-            boltTrail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            boltTrail.receiveShadows = false;
         }
 
         private void OnDestroy()

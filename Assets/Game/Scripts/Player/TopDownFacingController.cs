@@ -1,6 +1,8 @@
 using System;
+using RorType.Gameplay.AI;
 using RorType.Gameplay.Combat;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace RorType.Gameplay.Player
 {
@@ -16,27 +18,45 @@ namespace RorType.Gameplay.Player
         [SerializeField] private Transform feedbackTransform;
         [SerializeField] private Animator characterAnimator;
         [SerializeField] private RuntimeAnimatorController characterAnimatorController;
-        [SerializeField] private Transform projectileMuzzle;
+        [FormerlySerializedAs("projectileMuzzle")]
+        [SerializeField] private Transform shotMuzzle;
 
         [Header("Aiming")]
         [SerializeField, Min(0f)] private float turnSpeedDegrees = 720f;
+        [SerializeField, Range(0f, 30f)] private float firstShotAlignmentDegrees = 3f;
         [SerializeField, Min(0.1f)] private float mouseAimRayDistance = 250f;
+        [SerializeField, Min(1f)] private float weaponTurnSpeedDegrees = 360f;
+        [SerializeField, Min(1f)] private float gamepadAimTurnSpeedDegrees = 720f;
+        [SerializeField, Min(1f)] private float gamepadAimDistance = 12f;
+        [SerializeField, Range(0f, 30f)] private float aimSlowdownConeDegrees = 6f;
+        [SerializeField, Range(0.1f, 1f)] private float aimSlowdownFactor = 0.45f;
+
+        [Header("Weapon preparation and accuracy")]
+        [SerializeField, Min(0f)] private float aimPreparationSeconds = 0.22f;
+        [SerializeField, Min(0.01f)] private float stabilizationSeconds = 0.8f;
+        [SerializeField, Range(1f, 180f)] private float sharpTurnDegrees = 45f;
+        [SerializeField, Range(0f, 20f)] private float settledSpreadDegrees = 0.35f;
+        [SerializeField, Range(0f, 30f)] private float movingSpreadDegrees = 3f;
+        [SerializeField, Range(0f, 45f)] private float unstableSpreadDegrees = 6f;
+        [SerializeField, Range(0f, 1f)] private float shotInstability = 0.12f;
+        [SerializeField, Range(0f, 1f)] private float movingStabilityLimit = 0.45f;
+
+        [Header("Magazine")]
+        [SerializeField, Min(1)] private int magazineCapacity = 30;
+        [SerializeField, Min(0.01f)] private float reloadDuration = 2f;
 
         [Header("Shooting")]
         [SerializeField] private bool automaticFire = true;
         [SerializeField, Min(0.01f)] private float shotInterval = 0.18f;
-        [SerializeField, Min(0.1f)] private float projectileSpeed = 28f;
-        [SerializeField, Min(0.01f)] private float projectileLifetime = 1.4f;
-        [SerializeField, Min(0.1f)] private float projectileMaxDistance = 20f;
-        [SerializeField, Min(0.01f)] private float projectileRadius = 0.07f;
-        [SerializeField, Min(0f)] private float projectileSpawnForwardOffset = 0.95f;
-
-        [SerializeField] private Color projectileColor = new Color(0.86f, 0.14f, 0.14f);
-        [SerializeField, Min(0.01f)] private float projectileStretchMultiplier = 1.65f;
-        [SerializeField, Range(0.1f, 1f)] private float projectileSquashMultiplier = 0.74f;
-        [SerializeField, Min(0.01f)] private float projectileScaleRecoverySharpness = 10f;
-        [SerializeField, Min(0f)] private float projectileDamage = 1f;
-        [SerializeField, Min(0f)] private float projectileImpactImpulse = 1f;
+        [FormerlySerializedAs("projectileMaxDistance")]
+        [SerializeField, Min(0.1f)] private float shotMaxDistance = 20f;
+        [SerializeField] private LayerMask shotHitMask = Physics.DefaultRaycastLayers;
+        [FormerlySerializedAs("projectileSpawnForwardOffset")]
+        [SerializeField, Min(0f)] private float shotOriginForwardOffset = 0.95f;
+        [FormerlySerializedAs("projectileDamage")]
+        [SerializeField, Min(0f)] private float shotDamage = 1f;
+        [FormerlySerializedAs("projectileImpactImpulse")]
+        [SerializeField, Min(0f)] private float shotImpactImpulse = 1f;
 
         [Header("Character animation")]
         [SerializeField] private bool animateCharacter = true;
@@ -49,13 +69,8 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float movementBlendDamping = 0.12f;
         [SerializeField, Min(0.01f)] private float fireAnimationDuration = 0.42f;
 
-        [Header("Bolter effects")]
-        [SerializeField] private GameObject muzzleFlashPrefab;
-        [SerializeField] private GameObject environmentImpactPrefab;
+        [Header("Movement effects")]
         [SerializeField] private GameObject footstepDustPrefab;
-        [SerializeField] private Material boltTrailMaterial;
-        [SerializeField, Min(0.01f)] private float muzzleFlashScale = 0.4f;
-        [SerializeField, Min(0.01f)] private float impactScale = 0.35f;
         [SerializeField, Min(0.01f)] private float dustScale = 2.2f;
         [SerializeField, Min(0.1f)] private float footstepDistance = 1.3f;
         private float fireClipLength;
@@ -64,23 +79,28 @@ namespace RorType.Gameplay.Player
 
         private TopDownGroundProbe groundProbe;
 
-        [Header("Bounce")]
-        [SerializeField, Min(0.01f)] private float bounceDuration = 0.22f;
-        [SerializeField, Min(0f)] private float bounceSideScale = 0.13f;
-        [SerializeField, Min(0f)] private float bounceHeightScale = 0.2f;
-        [SerializeField, Min(0.01f)] private float bounceScaleSharpness = 24f;
+        [Header("Visual feedback")]
+        [FormerlySerializedAs("bounceScaleSharpness")]
+        [SerializeField, Min(0.01f)] private float feedbackScaleSharpness = 24f;
 
         private TopDownPlayerMotor motor;
         private Rigidbody body;
         private TopDownInputAdapter inputAdapter;
         private PlayerResourceController resources;
+        private PlayerSkillController skills;
         private CapsuleCollider capsuleCollider;
         private float shotCooldownTimer;
         private bool shotQueued;
-        private bool projectilePending;
+        private bool shotPending;
+        private RaycastHit[] shotRayHits = new RaycastHit[32];
+        private bool weaponAimActive;
+        private bool waitingForFirstShot;
+        private float preparationTimer;
+        private float stability;
+        private float reloadTimer;
+        private float pendingSpreadAngle;
         private Vector3 currentAimDirection = Vector3.forward;
         private Vector3 feedbackBaseLocalScale = Vector3.one;
-        private float bounceTimer;
         private bool hasFeedbackBasePose;
         private int upperBodyAnimationLayerIndex = -1;
         private int movementAnimationParameterHash;
@@ -97,6 +117,20 @@ namespace RorType.Gameplay.Player
             : Vector3.forward;
         public Vector3 AimOrigin => ResolveAimOrigin();
         public Transform FacingVisualRoot => visualRoot != null ? visualRoot : transform;
+        public bool IsReloading => reloadTimer > 0f;
+        public float ReloadRemaining => reloadTimer;
+        public int MagazineAmmo => resources != null ? resources.MagazineAmmo : 0;
+        public int ReserveAmmo => resources != null ? Mathf.Max(0, resources.Ammo - MagazineAmmo) : 0;
+        public bool IsInCombatStance => inputAdapter != null && inputAdapter.AimHeld;
+        public bool IsFiring => shotQueued || shotPending || fireAnimationTimer > 0f;
+        public float ShotSpreadDegrees => Mathf.Lerp(
+            inputAdapter != null && inputAdapter.HasMovementInput ? movingSpreadDegrees : settledSpreadDegrees,
+            unstableSpreadDegrees, 1f - stability);
+        public float AimReadiness => weaponAimActive && !IsReloading && !waitingForFirstShot
+            ? stability : 0f;
+        public Vector3 ActualAimDirection => Vector3.ProjectOnPlane(FacingVisualRoot.forward, Vector3.up).normalized;
+        public Vector3 ShotOrigin => ResolveShotOrigin();
+        public Vector3 AimMarkerPoint => ShotOrigin + CurrentAimDirection * gamepadAimDistance;
 
         private void EndStandingFire()
         {
@@ -109,10 +143,12 @@ namespace RorType.Gameplay.Player
 
         private void Awake()
         {
+            NormalizeWeaponSettings();
             motor = GetComponent<TopDownPlayerMotor>();
             body = GetComponent<Rigidbody>();
             inputAdapter = GetComponent<TopDownInputAdapter>();
             resources = GetComponent<PlayerResourceController>();
+            skills = GetComponent<PlayerSkillController>();
             capsuleCollider = GetComponent<CapsuleCollider>();
 
             groundProbe = GetComponent<TopDownGroundProbe>();
@@ -126,7 +162,7 @@ namespace RorType.Gameplay.Player
             }
             visualRoot = ResolveVisualRoot();
 
-            projectileMuzzle = ResolveProjectileMuzzle();
+            shotMuzzle = ResolveShotMuzzle();
             CacheAnimationHashes();
             if (EnsureCharacterAnimatorController())
             {
@@ -148,15 +184,39 @@ namespace RorType.Gameplay.Player
             }
 
             CacheFeedbackBasePose();
+            currentAimDirection = ActualAimDirection;
         }
+
+        private void Start() => resources.InitializeMagazine(magazineCapacity);
 
         private void Update()
         {
-            if (inputAdapter.FirePressed)
+            if (characterAnimator != null)
+                characterAnimator.speed = animationSpeedMultiplier
+                    * (inputAdapter.AimHeld || IsFiring
+                        ? 1f : motor.RootMotionPlaybackMultiplier);
+            if (inputAdapter.ReloadPressed)
+            {
+                inputAdapter.ConsumeReloadPressed();
+                if (!IsReloading && MagazineAmmo < magazineCapacity && ReserveAmmo > 0)
+                {
+                    reloadTimer = reloadDuration;
+                    shotQueued = false;
+                    preparationTimer = stability = 0f;
+                    fireAnimationTimer = 0f;
+                }
+            }
+            if (!IsInCombatStance || inputAdapter.CombatInputBlocked || IsReloading
+                || (skills != null && skills.IsSelectingPoint))
+            {
+                shotQueued = false;
+            }
+            else if (inputAdapter.FirePressed)
             {
                 shotQueued = true;
                 inputAdapter.ConsumeFirePressed();
             }
+            inputAdapter.ConsumeFirePressed();
 
             TickFacingAndAttacks(Time.deltaTime);
             // Supply this frame's input before the Animator evaluates root motion.
@@ -166,32 +226,72 @@ namespace RorType.Gameplay.Player
         private void LateUpdate()
         {
             UpdateFootstepDust();
-            bounceTimer = Mathf.Max(0f, bounceTimer - Time.deltaTime);
             UpdateFeedbackVisual(Time.deltaTime);
-            // Spawn after animation evaluation and visual feedback moved the weapon bone.
-            if (projectilePending)
+            // Resolve the hit in the shot's frame, using the evaluated weapon pose.
+            if (shotPending)
             {
-                projectilePending = false;
-                SpawnProjectile();
+                shotPending = false;
+                ApplyShotHit();
             }
         }
 
         private void TickFacingAndAttacks(float deltaTime)
         {
             shotCooldownTimer = Mathf.Max(0f, shotCooldownTimer - deltaTime);
+            fireAnimationTimer = Mathf.Max(0f, fireAnimationTimer - deltaTime);
+            if (IsReloading)
+            {
+                reloadTimer = Mathf.Max(0f, reloadTimer - deltaTime);
+                if (!IsReloading) resources.ReloadMagazine(magazineCapacity);
+            }
 
-            var facingDirection = ResolveAimDirection();
+            var previousAim = currentAimDirection;
+            currentAimDirection = ResolveAimDirection();
+            currentAimDirection.y = 0f;
+            if (currentAimDirection.sqrMagnitude > 0.0001f)
+            {
+                currentAimDirection.Normalize();
+            }
+
+            var hasAmmo = MagazineAmmo > 0;
+            if (!hasAmmo)
+            {
+                shotQueued = false;
+            }
+            var canAimWeapon = IsInCombatStance && !inputAdapter.CombatInputBlocked
+                && (skills == null || !skills.IsSelectingPoint);
+            if (canAimWeapon && !weaponAimActive)
+            {
+                // A brief click stays queued until the body finishes aiming.
+                waitingForFirstShot = true;
+                preparationTimer = stability = 0f;
+            }
+            else if (!canAimWeapon)
+            {
+                waitingForFirstShot = false;
+            }
+            weaponAimActive = canAimWeapon;
+            if (!weaponAimActive || inputAdapter.SprintHeld || motor.IsDashing
+                || Vector3.Angle(previousAim, currentAimDirection) >= sharpTurnDegrees)
+            {
+                preparationTimer = stability = 0f;
+                waitingForFirstShot = true;
+            }
+
+            // Outside aiming, every movement direction uses a forward run.
+            // With no movement, retain the last body rotation.
+            var facingDirection = IsInCombatStance
+                ? currentAimDirection : motor.RequestedWorldMoveDirection;
             facingDirection.y = 0f;
 
             if (facingDirection.sqrMagnitude > 0.0001f)
             {
-                currentAimDirection = facingDirection.normalized;
-                var targetRotation = Quaternion.LookRotation(currentAimDirection, Vector3.up);
+                var targetRotation = Quaternion.LookRotation(facingDirection, Vector3.up);
                 var currentRotation = visualRoot != null ? visualRoot.rotation : transform.rotation;
                 var nextRotation = Quaternion.RotateTowards(
                     currentRotation,
                     targetRotation,
-                    turnSpeedDegrees * Mathf.Max(0f, deltaTime));
+                    (IsInCombatStance ? weaponTurnSpeedDegrees : turnSpeedDegrees) * Mathf.Max(0f, deltaTime));
 
                 if (visualRoot == null)
                 {
@@ -203,11 +303,36 @@ namespace RorType.Gameplay.Player
                 }
             }
 
+            var aligned = Vector3.Angle(ActualAimDirection, currentAimDirection) <= firstShotAlignmentDegrees;
+            if (weaponAimActive && aligned && !IsReloading && !motor.IsDashing && !inputAdapter.SprintHeld)
+            {
+                preparationTimer += deltaTime;
+                stability = Mathf.MoveTowards(stability, inputAdapter.HasMovementInput ? movingStabilityLimit : 1f,
+                    deltaTime / Mathf.Max(0.01f, stabilizationSeconds));
+                waitingForFirstShot = preparationTimer < aimPreparationSeconds;
+            }
+            else
+            {
+                preparationTimer = 0f;
+                stability = Mathf.MoveTowards(stability, 0f, deltaTime / Mathf.Max(0.01f, stabilizationSeconds));
+                waitingForFirstShot = true;
+            }
+
             TryShoot();
         }
 
         private Vector3 ResolveAimDirection()
         {
+            if (skills != null && skills.IsSelectingPoint) return currentAimDirection;
+            if (inputAdapter.UsesGamepad)
+            {
+                if (inputAdapter.AimInput.sqrMagnitude <= 0.0001f) return currentAimDirection;
+                var desired = Vector3.ProjectOnPlane(motor.ResolveWorldInputDirection(inputAdapter.AimInput), Vector3.up).normalized;
+                var speed = gamepadAimTurnSpeedDegrees * inputAdapter.AimInput.magnitude;
+                if ((IsInCombatStance || IsFiring) && IsAimNearEnemy()) speed *= aimSlowdownFactor;
+                return Vector3.RotateTowards(currentAimDirection, desired,
+                    speed * Mathf.Deg2Rad * Time.deltaTime, 0f);
+            }
             var aimOrigin = ResolveAimOrigin();
             var currentCamera = Camera.main;
             if (currentCamera != null)
@@ -239,6 +364,11 @@ namespace RorType.Gameplay.Player
         public bool TryGetAimPoint(out Vector3 worldAimPoint)
         {
             var aimOrigin = ResolveAimOrigin();
+            if (inputAdapter.UsesGamepad)
+            {
+                worldAimPoint = AimMarkerPoint;
+                return true;
+            }
             var currentCamera = Camera.main;
             if (currentCamera != null)
             {
@@ -257,13 +387,39 @@ namespace RorType.Gameplay.Player
 
         private Vector3 ResolveAimOrigin()
         {
-            return capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            // Disabled root colliders have empty bounds; their authored geometry
+            // still defines the body center while the visual capsule handles contact.
+            return capsuleCollider != null
+                ? capsuleCollider.transform.TransformPoint(capsuleCollider.center)
+                : transform.position;
+        }
+
+        private bool IsAimNearEnemy()
+        {
+            var enemies = EnemyCapsuleController.ActiveEnemyInstances;
+            for (var i = 0; i < enemies.Count; i++)
+            {
+                var enemy = enemies[i];
+                if (enemy == null || !enemy.IsAlive) continue;
+                var direction = Vector3.ProjectOnPlane(enemy.VisionCenter - AimOrigin, Vector3.up);
+                if (direction.sqrMagnitude <= shotMaxDistance * shotMaxDistance
+                    && Vector3.Angle(currentAimDirection, direction) <= aimSlowdownConeDegrees)
+                {
+                    var line = enemy.VisionCenter - AimOrigin;
+                    if (line.sqrMagnitude > 0.0001f
+                        && TryGetBlockingHit(AimOrigin, line.normalized, line.magnitude, out var hit)
+                        && hit.collider.transform.IsChildOf(enemy.transform)) return true;
+                }
+            }
+            return false;
         }
 
         private void TryShoot()
         {
             var shouldShoot = shotQueued || (automaticFire && inputAdapter.FireHeld);
-            if (!shouldShoot || shotCooldownTimer > 0f)
+            if (!shouldShoot || shotCooldownTimer > 0f || !IsInCombatStance || !weaponAimActive
+                || waitingForFirstShot || IsReloading || motor.IsDashing || inputAdapter.SprintHeld
+                || MagazineAmmo <= 0 || (skills != null && skills.IsSelectingPoint))
             {
                 return;
             }
@@ -274,72 +430,104 @@ namespace RorType.Gameplay.Player
                 resources = GetComponent<PlayerResourceController>();
             }
 
-            if (resources != null && !resources.TryConsumeAmmo(1))
+            if (resources != null && !resources.TryConsumeMagazineRound())
             {
                 return;
             }
 
+            waitingForFirstShot = false;
+            pendingSpreadAngle = UnityEngine.Random.Range(-ShotSpreadDegrees, ShotSpreadDegrees);
+            stability = Mathf.Max(0f, stability - shotInstability);
             shotCooldownTimer = ResolveShotCycle();
             TriggerFireAnimation();
-            projectilePending = true;
+            shotPending = true;
         }
 
-        private void SpawnProjectile()
+        private void ApplyShotHit()
         {
-            var spawnOrigin = ResolveProjectileSpawnOrigin();
-            var shotDirection = ResolveProjectileDirection(spawnOrigin);
-            PlayerWeaponVfx.Spawn(muzzleFlashPrefab, projectileMuzzle != null ? projectileMuzzle.position : spawnOrigin,
-                Quaternion.LookRotation(shotDirection, Vector3.up), muzzleFlashScale, projectileMuzzle, 0.25f);
-            var effectiveProjectileLifetime = ResolveProjectileLifetime(projectileSpeed, projectileLifetime, projectileMaxDistance);
-
-            var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            projectile.name = "PlayerProjectile";
-            projectile.transform.SetPositionAndRotation(
-                spawnOrigin,
-                Quaternion.LookRotation(shotDirection, Vector3.up));
-            projectile.transform.localScale = Vector3.one * (projectileRadius * 2f);
-
-            var projectileCollider = projectile.GetComponent<SphereCollider>();
-            var projectileRenderer = projectile.GetComponent<Renderer>();
-
-            // The player's bolt still uses trigger callbacks for hit detection,
-            // but must never physically push its owner when it leaves the muzzle.
-            if (projectileCollider != null)
+            var shotOrigin = ResolveShotOrigin();
+            var shotDirection = Quaternion.Euler(0f, pendingSpreadAngle, 0f) * ResolveShotDirection(shotOrigin);
+            // A barrel extending through cover must not bypass that cover.
+            var bodyOrigin = AimOrigin;
+            bodyOrigin.y = shotOrigin.y;
+            var barrelOffset = shotOrigin - bodyOrigin;
+            if (barrelOffset.sqrMagnitude > 0.0001f
+                && TryGetBlockingHit(bodyOrigin, barrelOffset.normalized, barrelOffset.magnitude, out var barrelHit))
             {
-                projectileCollider.isTrigger = true;
+                ApplyDamage(barrelHit, shotDirection);
+                return;
             }
-
-            projectile.AddComponent<Rigidbody>();
-            var projectileSphere = projectile.AddComponent<TopDownProjectileSphere>();
-
-            if (projectileRenderer != null)
-            {
-                RuntimeRendererUtility.SetColor(projectileRenderer, projectileColor);
-            }
-
-            IgnorePlayerCollisions(projectileCollider);
-
-            projectileSphere.Initialize(
-                shotDirection,
-                projectileSpeed,
-                effectiveProjectileLifetime,
-                projectileStretchMultiplier,
-                projectileSquashMultiplier,
-                projectileScaleRecoverySharpness,
-                GetModifiedDamage(projectileDamage),
-                projectileImpactImpulse,
-                gameObject,
-                CombatTeam.Player);
-
-            projectileSphere.ConfigureBolterEffects(environmentImpactPrefab, impactScale, boltTrailMaterial);
-            TriggerBounce();
+            if (TryGetBlockingHit(shotOrigin, shotDirection, shotMaxDistance, out var hit))
+                ApplyDamage(hit, shotDirection);
         }
 
-        private Vector3 ResolveProjectileDirection(Vector3 spawnOrigin)
+        private bool TryGetBlockingHit(Vector3 origin, Vector3 direction, float distance, out RaycastHit hit)
         {
+            var hitCount = Physics.RaycastNonAlloc(
+                origin, direction, shotRayHits, distance,
+                shotHitMask, QueryTriggerInteraction.Collide);
+
+            // NonAlloc results are unordered. Grow only on saturation so the
+            // closest blocking hit cannot be omitted by a full buffer.
+            while (hitCount == shotRayHits.Length)
+            {
+                Array.Resize(ref shotRayHits, shotRayHits.Length * 2);
+                hitCount = Physics.RaycastNonAlloc(
+                    origin, direction, shotRayHits, distance,
+                    shotHitMask, QueryTriggerInteraction.Collide);
+            }
+
+            var closestHitIndex = -1;
+            var closestDistance = float.PositiveInfinity;
+            for (var i = 0; i < hitCount; i++)
+            {
+                var candidate = shotRayHits[i];
+                var hitCollider = candidate.collider;
+                if (hitCollider == null || hitCollider.transform.IsChildOf(transform)
+                    || candidate.distance >= closestDistance)
+                {
+                    continue;
+                }
+
+                // Interaction/pickup volumes do not stop shots. Damageable
+                // trigger colliders remain valid targets.
+                if (hitCollider.isTrigger
+                    && !CombatUtility.TryGetDamageable(hitCollider, out _, out _))
+                {
+                    continue;
+                }
+
+                closestHitIndex = i;
+                closestDistance = candidate.distance;
+            }
+
+            if (closestHitIndex < 0)
+            {
+                hit = default;
+                return false;
+            }
+
+            hit = shotRayHits[closestHitIndex];
+            return true;
+        }
+
+        private void ApplyDamage(RaycastHit hit, Vector3 shotDirection)
+        {
+            if (CombatUtility.TryGetDamageable(hit.collider, out var damageable, out _)
+                && damageable.IsAlive && damageable.Team != CombatTeam.Player)
+            {
+                damageable.ReceiveHit(new CombatHitInfo(
+                    GetModifiedDamage(shotDamage), hit.point, shotDirection,
+                    shotImpactImpulse, gameObject, CombatTeam.Player));
+            }
+        }
+
+        private Vector3 ResolveShotDirection(Vector3 shotOrigin)
+        {
+            if (inputAdapter.UsesGamepad) return CurrentAimDirection;
             if (TryGetAimPoint(out var aimPoint))
             {
-                var directionToAim = aimPoint - spawnOrigin;
+                var directionToAim = aimPoint - shotOrigin;
                 directionToAim.y = 0f;
                 if (directionToAim.sqrMagnitude > 0.0001f)
                 {
@@ -352,15 +540,14 @@ namespace RorType.Gameplay.Player
                 : Vector3.forward;
         }
 
-        private Vector3 ResolveProjectileSpawnOrigin()
+        private Vector3 ResolveShotOrigin()
         {
-            if (projectileMuzzle != null)
+            if (shotMuzzle != null)
             {
-                return projectileMuzzle.position;
+                return shotMuzzle.position;
             }
 
-            var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
-            return spawnOrigin + (currentAimDirection * projectileSpawnForwardOffset);
+            return ResolveAimOrigin() + (currentAimDirection * shotOriginForwardOffset);
         }
 
         private void TriggerFireAnimation()
@@ -409,15 +596,17 @@ namespace RorType.Gameplay.Player
                 EndStandingFire();
 
             var targetMovement = ResolveMovementAnimationValues(isMoving);
+            // Do not retain side/backward blend values after leaving aiming.
+            var movementDamping = IsInCombatStance ? movementBlendDamping : 0f;
             characterAnimator.SetFloat(
                 movementAnimationParameterHash,
                 targetMovement.y,
-                movementBlendDamping,
+                movementDamping,
                 Time.deltaTime);
             characterAnimator.SetFloat(
                 MoveStrafeParameterHash,
                 targetMovement.x,
-                movementBlendDamping,
+                movementDamping,
                 Time.deltaTime);
 
             var targetFireWeight = fireAnimationTimer > 0f ? 1f : 0f;
@@ -434,8 +623,6 @@ namespace RorType.Gameplay.Player
                 characterAnimator.SetLayerWeight(
                     upperBodyAnimationLayerIndex, fireWeight < 0.001f ? 0f : fireWeight);
             }
-            fireAnimationTimer = Mathf.Max(0f, fireAnimationTimer - Time.deltaTime);
-
         }
 
         private Vector2 ResolveMovementAnimationValues(bool isMoving)
@@ -455,8 +642,19 @@ namespace RorType.Gameplay.Player
                 return Vector2.zero;
             }
 
-            // Use the body's current facing, including its turn toward the cursor,
-            // so sideways input selects the matching left/right step cycle.
+            var speedRatio = 1f;
+            if (motor != null && motor.WalkSpeed > 0.01f)
+            {
+                var maximumSpeedRatio = Mathf.Max(1f, motor.SprintSpeed / motor.WalkSpeed);
+                speedRatio = Mathf.Clamp(motor.CurrentSpeed / motor.WalkSpeed, 0f, maximumSpeedRatio);
+            }
+
+            if (!IsInCombatStance)
+            {
+                return new Vector2(0f, speedRatio);
+            }
+
+            // Side and backward steps are available only while aiming.
             var forward = visualRoot != null ? visualRoot.forward : transform.forward;
             forward.y = 0f;
             forward.Normalize();
@@ -465,13 +663,6 @@ namespace RorType.Gameplay.Player
             var localMovement = new Vector2(
                 Vector3.Dot(direction, right),
                 Vector3.Dot(direction, forward));
-
-            var speedRatio = 1f;
-            if (motor != null && motor.WalkSpeed > 0.01f)
-            {
-                var maximumSpeedRatio = Mathf.Max(1f, motor.SprintSpeed / motor.WalkSpeed);
-                speedRatio = Mathf.Clamp(motor.CurrentSpeed / motor.WalkSpeed, 0f, maximumSpeedRatio);
-            }
 
             return localMovement * speedRatio;
         }
@@ -508,39 +699,24 @@ namespace RorType.Gameplay.Player
             upperBodyFireBlendFullPathHash = Animator.StringToHash($"{upperBodyAnimationLayer}.{upperBodyFireBlendState}");
         }
 
-        private void IgnorePlayerCollisions(Collider projectileCollider)
-        {
-            if (projectileCollider == null)
-            {
-                return;
-            }
-
-            var playerColliders = GetComponentsInChildren<Collider>();
-            for (var i = 0; i < playerColliders.Length; i++)
-            {
-                var playerCollider = playerColliders[i];
-                if (playerCollider == null || playerCollider == projectileCollider)
-                {
-                    continue;
-                }
-
-                Physics.IgnoreCollision(projectileCollider, playerCollider, true);
-            }
-        }
-
         public void ResetFeedbackState()
         {
             standingFireActive = false;
-            bounceTimer = 0f;
             shotCooldownTimer = 0f;
             shotQueued = false;
+            shotPending = false;
+            weaponAimActive = false;
+            waitingForFirstShot = false;
+            reloadTimer = preparationTimer = stability = 0f;
+            if (skills != null) skills.CancelPointSelection();
+            if (inputAdapter != null) inputAdapter.SuppressFireUntilRelease();
+            fireAnimationTimer = 0f;
 
             if (EnsureCharacterAnimatorController())
             {
                 characterAnimator.SetFloat(movementAnimationParameterHash, 0f);
                 characterAnimator.SetFloat(MoveStrafeParameterHash, 0f);
                 characterAnimator.SetFloat(fireAnimationWeightParameterHash, 0f);
-                fireAnimationTimer = 0f;
 
                 characterAnimator.Play(locomotionAnimationFullPathHash, 0, 0f);
 
@@ -560,11 +736,6 @@ namespace RorType.Gameplay.Player
             targetTransform.localScale = feedbackBaseLocalScale;
         }
 
-        private void TriggerBounce()
-        {
-            bounceTimer = bounceDuration;
-        }
-
         private float GetModifiedDamage(float baseDamage)
         {
             if (resources == null)
@@ -573,17 +744,6 @@ namespace RorType.Gameplay.Player
             }
 
             return Mathf.Max(0f, baseDamage) * (resources != null ? resources.DamageMultiplier : 1f);
-        }
-
-        private static float ResolveProjectileLifetime(float speed, float configuredLifetime, float maxDistance)
-        {
-            var effectiveLifetime = Mathf.Max(0.01f, configuredLifetime);
-            if (speed <= 0f || maxDistance <= 0f)
-            {
-                return effectiveLifetime;
-            }
-
-            return Mathf.Min(effectiveLifetime, maxDistance / speed);
         }
 
         private void UpdateFeedbackVisual(float deltaTime)
@@ -601,36 +761,8 @@ namespace RorType.Gameplay.Player
                 targetScale = Vector3.Scale(targetScale, motor.MovementVisualScale);
             }
 
-            if (bounceTimer > 0f)
-            {
-                var progress = 1f - (bounceTimer / bounceDuration);
-                targetScale = Vector3.Scale(targetScale, EvaluateBounceScale(progress));
-            }
-
-            var scaleBlend = 1f - Mathf.Exp(-bounceScaleSharpness * deltaTime);
+            var scaleBlend = 1f - Mathf.Exp(-feedbackScaleSharpness * deltaTime);
             targetTransform.localScale = Vector3.Lerp(targetTransform.localScale, targetScale, scaleBlend);
-        }
-
-        private Vector3 EvaluateBounceScale(float progress)
-        {
-            progress = Mathf.Clamp01(progress);
-
-            if (progress < 0.38f)
-            {
-                var squashPhase = progress / 0.38f;
-                var squashStrength = Mathf.Sin(squashPhase * Mathf.PI * 0.5f);
-                return new Vector3(
-                    1f + (bounceSideScale * squashStrength),
-                    1f - (bounceHeightScale * squashStrength),
-                    1f + (bounceSideScale * squashStrength));
-            }
-
-            var reboundPhase = (progress - 0.38f) / 0.62f;
-            var reboundStrength = Mathf.Sin(reboundPhase * Mathf.PI) * (1f - reboundPhase) * 0.35f;
-            return new Vector3(
-                1f - (bounceSideScale * reboundStrength),
-                1f + (bounceHeightScale * reboundStrength),
-                1f - (bounceSideScale * reboundStrength));
         }
 
         private void CacheFeedbackBasePose()
@@ -658,6 +790,28 @@ namespace RorType.Gameplay.Player
             }
 
             return transform;
+        }
+
+        private void OnValidate() => NormalizeWeaponSettings();
+
+        private void NormalizeWeaponSettings()
+        {
+            magazineCapacity = Mathf.Max(1, magazineCapacity);
+            reloadDuration = Mathf.Max(0.01f, reloadDuration);
+            aimPreparationSeconds = Mathf.Max(0f, aimPreparationSeconds);
+            stabilizationSeconds = Mathf.Max(0.01f, stabilizationSeconds);
+            weaponTurnSpeedDegrees = Mathf.Max(1f, weaponTurnSpeedDegrees);
+            gamepadAimTurnSpeedDegrees = Mathf.Max(1f, gamepadAimTurnSpeedDegrees);
+            gamepadAimDistance = Mathf.Max(1f, gamepadAimDistance);
+            movingSpreadDegrees = Mathf.Max(settledSpreadDegrees, movingSpreadDegrees);
+            unstableSpreadDegrees = Mathf.Max(movingSpreadDegrees, unstableSpreadDegrees);
+        }
+
+        private void OnDisable()
+        {
+            shotQueued = shotPending = weaponAimActive = false;
+            reloadTimer = preparationTimer = stability = 0f;
+            if (inputAdapter != null) inputAdapter.SuppressFireUntilRelease();
         }
 
         private Animator ResolveCharacterAnimator()
@@ -711,11 +865,11 @@ namespace RorType.Gameplay.Player
             return null;
         }
 
-        private Transform ResolveProjectileMuzzle()
+        private Transform ResolveShotMuzzle()
         {
-            if (projectileMuzzle != null)
+            if (shotMuzzle != null)
             {
-                return projectileMuzzle;
+                return shotMuzzle;
             }
 
             var transforms = GetComponentsInChildren<Transform>(true);

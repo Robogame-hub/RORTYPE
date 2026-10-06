@@ -12,12 +12,16 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float cursorLookAheadDistance = 9f;
         [SerializeField, Min(0.01f)] private float cursorLookAheadSharpness = 9f;
         [SerializeField, Min(0.01f)] private float cursorLookAheadLag = 0.28f;
+        [Header("Camera rotation")]
+        [SerializeField, Min(0f)] private float rotationSensitivity = 3f;
 
         private Vector3 smoothedTargetPosition;
         private Vector3 smoothedLookAheadOffset;
         private Vector3 smoothedLookAheadVelocity;
         private TopDownPlayerMotor targetMotor;
         private TopDownFacingController targetFacing;
+        private TopDownInputAdapter targetInput;
+        private float orbitYaw;
         private bool hasSmoothedTargetPosition;
         private float nextTargetSearchTime;
 
@@ -34,6 +38,9 @@ namespace RorType.Gameplay.Player
             targetFacing = targetMotor != null
                 ? targetMotor.GetComponent<TopDownFacingController>()
                 : (target != null ? target.GetComponentInParent<TopDownFacingController>() : null);
+            targetInput = targetMotor != null
+                ? targetMotor.GetComponent<TopDownInputAdapter>()
+                : (target != null ? target.GetComponentInParent<TopDownInputAdapter>() : null);
             hasSmoothedTargetPosition = false;
             smoothedLookAheadOffset = Vector3.zero;
             smoothedLookAheadVelocity = Vector3.zero;
@@ -44,6 +51,12 @@ namespace RorType.Gameplay.Player
             if (!TryResolveTarget())
             {
                 return;
+            }
+
+            if (targetInput != null && targetInput.CameraRotateHeld)
+            {
+                // Mouse X is displacement for this frame, so do not multiply by delta time.
+                orbitYaw = Mathf.Repeat(orbitYaw + targetInput.CameraRotationInput * rotationSensitivity, 360f);
             }
 
             var targetPosition = GetTargetPosition();
@@ -71,8 +84,10 @@ namespace RorType.Gameplay.Player
                 Time.deltaTime);
 
             var framedTargetPosition = smoothedTargetPosition + smoothedLookAheadOffset;
-            transform.position = framedTargetPosition + followOffset;
-            transform.rotation = Quaternion.LookRotation((framedTargetPosition + lookOffset) - transform.position, Vector3.up);
+            var orbitRotation = Quaternion.AngleAxis(orbitYaw, Vector3.up);
+            transform.position = framedTargetPosition + orbitRotation * followOffset;
+            transform.rotation = Quaternion.LookRotation(
+                (framedTargetPosition + orbitRotation * lookOffset) - transform.position, Vector3.up);
         }
 
         private Vector3 GetTargetPosition()
@@ -122,7 +137,8 @@ namespace RorType.Gameplay.Player
                 return Vector3.zero;
             }
 
-            if (targetFacing == null || !targetFacing.TryGetAimPoint(out var aimPoint))
+            if (targetFacing == null || !targetFacing.IsInCombatStance
+                || !targetFacing.TryGetAimPoint(out var aimPoint))
             {
                 return Vector3.zero;
             }

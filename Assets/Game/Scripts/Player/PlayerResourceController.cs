@@ -13,6 +13,8 @@ namespace RorType.Gameplay.Player
         private struct PersistentState
         {
             public int Ammo;
+            public int MagazineAmmo;
+            public bool MagazineInitialized;
             public int Money;
             public float Health;
             public float MaxHealthBonus;
@@ -69,6 +71,8 @@ namespace RorType.Gameplay.Player
         private Coroutine hitFlashRoutine;
 
         public int Ammo { get; private set; }
+        public int MagazineAmmo { get; private set; }
+        private bool magazineInitialized;
         public int MaxAmmo => maxAmmo;
         public int Money { get; private set; }
         public int MaxMoney => maxMoney;
@@ -107,6 +111,8 @@ namespace RorType.Gameplay.Player
             if (hasPersistentState)
             {
                 Ammo = Mathf.Clamp(persistentState.Ammo, 0, maxAmmo);
+                MagazineAmmo = Mathf.Clamp(persistentState.MagazineAmmo, 0, Ammo);
+                magazineInitialized = persistentState.MagazineInitialized;
                 Money = Mathf.Clamp(persistentState.Money, 0, maxMoney);
                 maxHealthBonus = Mathf.Max(0f, persistentState.MaxHealthBonus);
                 Health = Mathf.Clamp(persistentState.Health, 0f, MaxHealth);
@@ -162,9 +168,32 @@ namespace RorType.Gameplay.Player
             }
 
             Ammo -= amount;
+            MagazineAmmo = Mathf.Min(MagazineAmmo, Ammo);
             SavePersistentState();
             AmmoChanged?.Invoke(Ammo);
             return true;
+        }
+
+        // Ammo is the total carried pool, including the loaded magazine.
+        public void InitializeMagazine(int capacity)
+        {
+            MagazineAmmo = magazineInitialized ? Mathf.Min(MagazineAmmo, capacity, Ammo)
+                : Mathf.Min(capacity, Ammo);
+            magazineInitialized = true;
+            SavePersistentState();
+        }
+
+        public bool TryConsumeMagazineRound()
+        {
+            if (MagazineAmmo <= 0 || Ammo <= 0) return false;
+            MagazineAmmo--;
+            return TryConsumeAmmo(1);
+        }
+
+        public void ReloadMagazine(int capacity)
+        {
+            MagazineAmmo = Mathf.Min(capacity, Ammo);
+            SavePersistentState();
         }
 
         public void AddAmmo(int amount)
@@ -389,6 +418,8 @@ namespace RorType.Gameplay.Player
             persistentState = new PersistentState
             {
                 Ammo = Ammo,
+                MagazineAmmo = MagazineAmmo,
+                MagazineInitialized = magazineInitialized,
                 Money = Money,
                 Health = Health,
                 MaxHealthBonus = maxHealthBonus,

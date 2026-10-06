@@ -100772,6 +100772,11 @@ PrefabInstance:
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 190d8f55f396d6742b8f7151f7c3ebf1, type: 3}
+--- !u!4 &1118925917 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2161514372139698299, guid: 190d8f55f396d6742b8f7151f7c3ebf1, type: 3}
+  m_PrefabInstance: {fileID: 1118925916}
+  m_PrefabAsset: {fileID: 0}
 --- !u!43 &1119667882
 Mesh:
   m_ObjectHideFlags: 0
@@ -168090,7 +168095,7 @@ PrefabInstance:
     - target: {fileID: 7473915535883155272, guid: 3f171f80d7e282c4b8c45313d1b65dc5, type: 3}
       propertyPath: movementReference
       value: 
-      objectReference: {fileID: 2113854356}
+      objectReference: {fileID: 1118925917}
     - target: {fileID: 8292194168983852055, guid: 3f171f80d7e282c4b8c45313d1b65dc5, type: 3}
       propertyPath: m_Name
       value: TopDownPlayer
@@ -168100,7 +168105,7 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 2113854356}
     - target: {fileID: 8784270365407993801, guid: 3f171f80d7e282c4b8c45313d1b65dc5, type: 3}
-      propertyPath: projectileMuzzle
+      propertyPath: shotMuzzle
       value: 
       objectReference: {fileID: 1480207951}
     - target: {fileID: 8784270365407993801, guid: 3f171f80d7e282c4b8c45313d1b65dc5, type: 3}

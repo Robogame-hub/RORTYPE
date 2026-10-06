@@ -1,11 +1,10 @@
 using RorType.Gameplay.Combat;
-using RorType.Gameplay.UI;
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 namespace RorType.Gameplay.Player
 {
     [DisallowMultipleComponent]
+    [DefaultExecutionOrder(-50)]
     [RequireComponent(typeof(CapsuleCollider))]
     [RequireComponent(typeof(PlayerResourceController))]
     [RequireComponent(typeof(TopDownFacingController))]
@@ -15,24 +14,25 @@ namespace RorType.Gameplay.Player
 
         [Header("Radial Burst")]
         [SerializeField] private KeyCode radialBurstKey = KeyCode.Alpha1;
+        [SerializeField] private TopDownProjectileSphere radialProjectilePrefab;
         [SerializeField, Min(0.1f)] private float radialBurstCooldown = 5f;
         [SerializeField, Min(3)] private int radialProjectileCount = 7;
         [SerializeField, Min(0.1f)] private float radialProjectileSpeed = 18f;
         [SerializeField, Min(0.01f)] private float radialProjectileLifetime = 1.8f;
         [SerializeField, Min(0.1f)] private float radialProjectileMaxDistance = 20f;
-        [SerializeField, Min(0.01f)] private float radialProjectileRadius = 0.18f;
         [SerializeField, Min(0f)] private float radialProjectileForwardOffset = 0.95f;
         [SerializeField, Min(0f)] private float radialProjectileDamage = 1f;
         [SerializeField, Min(0f)] private float radialProjectileImpactImpulse = 1f;
-        [SerializeField] private Color radialProjectileColor = new Color(0.86f, 0.14f, 0.14f);
 
         [Header("Sticky Bomb")]
         [SerializeField] private KeyCode stickyBombKey = KeyCode.Alpha2;
+        [SerializeField] private StickyBombProjectile stickyBombPrefab;
+        [SerializeField, Min(0.1f)] private float groundCursorSpeed = 10f;
+        [SerializeField, Min(0.1f)] private float initialGroundCursorDistance = 8f;
         [SerializeField, Min(0.1f)] private float stickyBombCooldown = 5f;
         [SerializeField, Min(0.1f)] private float stickyBombSpeed = 28f;
         [SerializeField, Min(0.01f)] private float stickyBombLifetime = 1.4f;
         [SerializeField, Min(0.1f)] private float stickyBombMaxDistance = 20f;
-        [SerializeField, Min(0.01f)] private float stickyBombRadius = 0.3f;
         [SerializeField, Min(0f)] private float stickyBombSpawnForwardOffset = 0.95f;
         [SerializeField, Min(0.01f)] private float stickyBombFuse = 1.2f;
         [SerializeField, Min(0.1f)] private float stickyBombExplosionVisualRadius = 3f;
@@ -40,13 +40,18 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float stickyBombExplosionDamage = 30f;
         [SerializeField, Min(0f)] private float stickyBombExplosionImpulse = 4.8f;
         [SerializeField, Min(0.05f)] private float stickyBombExplosionVisualLifetime = 0.16f;
-        [SerializeField] private Color stickyBombColor = new Color(0.65f, 0.16f, 1f);
-
-        private CapsuleCollider capsuleCollider;
         private PlayerResourceController resources;
         private TopDownFacingController facingController;
+        private TopDownInputAdapter inputAdapter;
+        private TopDownPlayerMotor motor;
+        private TopDownGroundProbe groundProbe;
+        private readonly RaycastHit[] groundHits = new RaycastHit[32];
+        private Collider[] playerColliders;
         private float radialBurstCooldownTimer;
         private float stickyBombCooldownTimer;
+        public bool IsSelectingPoint { get; private set; }
+        public Vector3 GroundAimPoint { get; private set; }
+        public bool HasValidGroundPoint { get; private set; }
 
         public KeyCode GetSkillKey(int slotIndex)
         {
@@ -65,9 +70,12 @@ namespace RorType.Gameplay.Player
 
         private void Awake()
         {
-            capsuleCollider = GetComponent<CapsuleCollider>();
             resources = GetComponent<PlayerResourceController>();
             facingController = GetComponent<TopDownFacingController>();
+            inputAdapter = GetComponent<TopDownInputAdapter>();
+            motor = GetComponent<TopDownPlayerMotor>();
+            groundProbe = GetComponent<TopDownGroundProbe>();
+            playerColliders = GetComponentsInChildren<Collider>();
             NormalizeSettings();
         }
 
@@ -77,25 +85,51 @@ namespace RorType.Gameplay.Player
             radialBurstCooldownTimer = Mathf.Max(0f, radialBurstCooldownTimer - deltaTime);
             stickyBombCooldownTimer = Mathf.Max(0f, stickyBombCooldownTimer - deltaTime);
 
-            if (IsSkillInputBlocked())
+            if (inputAdapter.CombatInputBlocked || !resources.IsAlive)
             {
+                CancelPointSelection();
+                return;
+            }
+            if (inputAdapter.ReloadPressed)
+            {
+                CancelPointSelection();
                 return;
             }
 
-            if (Input.GetKeyDown(radialBurstKey))
+            if (inputAdapter.RadialSkillPressed || (inputAdapter.KeyboardAndMouseEnabled
+                && !inputAdapter.UsesGamepad && Input.GetKeyDown(radialBurstKey)))
             {
                 TryUseRadialBurst();
             }
 
-            if (Input.GetKeyDown(stickyBombKey))
+            if (inputAdapter.PointSkillPressed || (inputAdapter.KeyboardAndMouseEnabled
+                && !inputAdapter.UsesGamepad && Input.GetKeyDown(stickyBombKey)))
             {
                 TryUseStickyBomb();
+            }
+            if (!IsSelectingPoint) return;
+            if (inputAdapter.CancelPressed || inputAdapter.DashPressed)
+            {
+                CancelPointSelection();
+                return;
+            }
+            UpdateGroundCursor(deltaTime);
+            if (inputAdapter.FirePressed)
+            {
+                inputAdapter.SuppressFireUntilRelease();
+                if (HasValidGroundPoint && !facingController.IsReloading)
+                {
+                    stickyBombCooldownTimer = stickyBombCooldown;
+                    FireStickyBomb();
+                    IsSelectingPoint = false;
+                }
             }
         }
 
         private void TryUseRadialBurst()
         {
-            if (radialBurstCooldownTimer > 0f)
+            if (radialBurstCooldownTimer > 0f || radialProjectilePrefab == null
+                || IsSelectingPoint || facingController.IsReloading)
             {
                 return;
             }
@@ -106,13 +140,58 @@ namespace RorType.Gameplay.Player
 
         private void TryUseStickyBomb()
         {
-            if (stickyBombCooldownTimer > 0f)
+            if (stickyBombCooldownTimer > 0f || stickyBombPrefab == null || facingController.IsReloading)
             {
                 return;
             }
 
-            stickyBombCooldownTimer = stickyBombCooldown;
-            FireStickyBomb();
+            if (IsSelectingPoint) { CancelPointSelection(); return; }
+            IsSelectingPoint = true;
+            var origin = motor.RenderPosition;
+            GroundAimPoint = origin + facingController.CurrentAimDirection
+                * Mathf.Min(initialGroundCursorDistance, stickyBombMaxDistance);
+            inputAdapter.SuppressFireUntilRelease();
+        }
+
+        public void CancelPointSelection()
+        {
+            if (IsSelectingPoint) inputAdapter.SuppressFireUntilRelease();
+            IsSelectingPoint = HasValidGroundPoint = false;
+        }
+
+        private void UpdateGroundCursor(float deltaTime)
+        {
+            var point = GroundAimPoint;
+            var origin = motor.RenderPosition;
+            var groundHeight = groundProbe.IsGrounded ? groundProbe.GroundPoint.y : origin.y;
+            if (inputAdapter.UsesGamepad)
+            {
+                point += motor.ResolveWorldInputDirection(inputAdapter.AimInput)
+                    * inputAdapter.AimInput.magnitude * groundCursorSpeed * deltaTime;
+            }
+            else if (Camera.main != null)
+            {
+                var ray = Camera.main.ScreenPointToRay(inputAdapter.MouseScreenPosition);
+                var plane = new Plane(Vector3.up, new Vector3(origin.x, groundHeight, origin.z));
+                if (plane.Raycast(ray, out var distance)) point = ray.GetPoint(distance);
+            }
+            var offset = Vector3.ProjectOnPlane(point - origin, Vector3.up);
+            point = origin + Vector3.ClampMagnitude(offset, stickyBombMaxDistance);
+            point.y = groundHeight;
+            HasValidGroundPoint = false;
+            var count = Physics.RaycastNonAlloc(point + Vector3.up * 10f, Vector3.down,
+                groundHits, 30f, groundProbe.GroundLayerMask, QueryTriggerInteraction.Ignore);
+            var closest = float.PositiveInfinity;
+            for (var i = 0; i < count; i++)
+            {
+                var hit = groundHits[i];
+                if (hit.collider.transform.IsChildOf(transform) || !groundProbe.IsGroundCollider(hit.collider)
+                    || !groundProbe.IsStableSurfaceNormal(hit.normal) || hit.distance >= closest) continue;
+                closest = hit.distance;
+                point.y = hit.point.y;
+                HasValidGroundPoint = true;
+            }
+            GroundAimPoint = point;
         }
 
         private void FireRadialProjectiles()
@@ -139,24 +218,9 @@ namespace RorType.Gameplay.Player
                 radialProjectileLifetime,
                 radialProjectileMaxDistance);
 
-            var projectile = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            projectile.name = "PlayerRadialProjectile";
-            projectile.transform.SetPositionAndRotation(
-                spawnOrigin,
+            var projectileSphere = Instantiate(radialProjectilePrefab, spawnOrigin,
                 Quaternion.LookRotation(projectileDirection, Vector3.up));
-            projectile.transform.localScale = Vector3.one * (radialProjectileRadius * 2f);
-
-            var projectileCollider = projectile.GetComponent<SphereCollider>();
-            var projectileRenderer = projectile.GetComponent<Renderer>();
-            projectile.AddComponent<Rigidbody>();
-            var projectileSphere = projectile.AddComponent<TopDownProjectileSphere>();
-
-            if (projectileRenderer != null)
-            {
-                RuntimeRendererUtility.SetColor(projectileRenderer, radialProjectileColor);
-            }
-
-            IgnorePlayerCollisions(projectileCollider);
+            IgnorePlayerCollisions(projectileSphere.GetComponent<SphereCollider>());
 
             projectileSphere.Initialize(
                 projectileDirection,
@@ -173,31 +237,17 @@ namespace RorType.Gameplay.Player
 
         private void FireStickyBomb()
         {
-            var shotDirection = ResolveAimDirection();
+            var shotDirection = Vector3.ProjectOnPlane(GroundAimPoint - facingController.AimOrigin, Vector3.up).normalized;
+            if (shotDirection.sqrMagnitude <= 0.0001f) shotDirection = facingController.CurrentAimDirection;
             var spawnOrigin = GetProjectileSpawnOrigin(shotDirection, stickyBombSpawnForwardOffset);
             var effectiveLifetime = ResolveProjectileLifetime(
                 stickyBombSpeed,
                 stickyBombLifetime,
                 stickyBombMaxDistance);
 
-            var bomb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            bomb.name = "PlayerStickyBomb";
-            bomb.transform.SetPositionAndRotation(
-                spawnOrigin,
+            var stickyProjectile = Instantiate(stickyBombPrefab, spawnOrigin,
                 Quaternion.LookRotation(shotDirection, Vector3.up));
-            bomb.transform.localScale = Vector3.one * (stickyBombRadius * 2f);
-
-            var bombCollider = bomb.GetComponent<SphereCollider>();
-            var bombRenderer = bomb.GetComponent<Renderer>();
-            bomb.AddComponent<Rigidbody>();
-            var stickyProjectile = bomb.AddComponent<StickyBombProjectile>();
-
-            if (bombRenderer != null)
-            {
-                RuntimeRendererUtility.SetColor(bombRenderer, stickyBombColor);
-            }
-
-            IgnorePlayerCollisions(bombCollider);
+            IgnorePlayerCollisions(stickyProjectile.GetComponent<SphereCollider>());
 
             stickyProjectile.Initialize(
                 shotDirection,
@@ -209,14 +259,14 @@ namespace RorType.Gameplay.Player
                 GetModifiedDamage(stickyBombExplosionDamage),
                 stickyBombExplosionImpulse,
                 stickyBombExplosionVisualLifetime,
-                stickyBombColor,
                 gameObject,
                 CombatTeam.Player);
+            stickyProjectile.SetGroundDestination(GroundAimPoint);
         }
 
         private Vector3 ResolveAimDirection()
         {
-            var origin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var origin = facingController.AimOrigin;
             if (facingController != null && facingController.TryGetAimPoint(out var aimPoint))
             {
                 var direction = aimPoint - origin;
@@ -234,7 +284,7 @@ namespace RorType.Gameplay.Player
 
         private Vector3 GetProjectileSpawnOrigin(Vector3 direction, float forwardOffset)
         {
-            var spawnOrigin = capsuleCollider != null ? capsuleCollider.bounds.center : transform.position;
+            var spawnOrigin = facingController.AimOrigin;
             return spawnOrigin + (direction * Mathf.Max(0f, forwardOffset));
         }
 
@@ -255,7 +305,6 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            var playerColliders = GetComponentsInChildren<Collider>();
             for (var i = 0; i < playerColliders.Length; i++)
             {
                 var playerCollider = playerColliders[i];
@@ -279,21 +328,12 @@ namespace RorType.Gameplay.Player
             return Mathf.Min(effectiveLifetime, maxDistance / speed);
         }
 
-        private static bool IsSkillInputBlocked()
-        {
-            if (PortalUiRuntime.IsChoiceOpen || ShopUiPanel.IsAnyOpen)
-            {
-                return true;
-            }
-
-            var eventSystem = EventSystem.current;
-            return eventSystem != null && eventSystem.IsPointerOverGameObject();
-        }
-
         private void OnValidate()
         {
             NormalizeSettings();
         }
+
+        private void OnDisable() => CancelPointSelection();
 
         private void NormalizeSettings()
         {
@@ -302,7 +342,6 @@ namespace RorType.Gameplay.Player
             radialProjectileSpeed = Mathf.Max(0.1f, radialProjectileSpeed);
             radialProjectileLifetime = Mathf.Max(0.01f, radialProjectileLifetime);
             radialProjectileMaxDistance = Mathf.Max(0.1f, radialProjectileMaxDistance);
-            radialProjectileRadius = Mathf.Max(0.01f, radialProjectileRadius);
             radialProjectileForwardOffset = Mathf.Max(0f, radialProjectileForwardOffset);
             radialProjectileDamage = Mathf.Max(0f, radialProjectileDamage);
             radialProjectileImpactImpulse = Mathf.Max(0f, radialProjectileImpactImpulse);
@@ -311,7 +350,6 @@ namespace RorType.Gameplay.Player
             stickyBombSpeed = Mathf.Max(0.1f, stickyBombSpeed);
             stickyBombLifetime = Mathf.Max(0.01f, stickyBombLifetime);
             stickyBombMaxDistance = Mathf.Max(0.1f, stickyBombMaxDistance);
-            stickyBombRadius = Mathf.Max(0.01f, stickyBombRadius);
             stickyBombSpawnForwardOffset = Mathf.Max(0f, stickyBombSpawnForwardOffset);
             stickyBombFuse = Mathf.Max(0.01f, stickyBombFuse);
             stickyBombExplosionVisualRadius = Mathf.Max(0.1f, stickyBombExplosionVisualRadius);

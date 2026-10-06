@@ -72,6 +72,7 @@ namespace RorType.Gameplay.Player
         private Rigidbody body;
         private Animator visualAnimator;
         private CapsuleCollider capsuleCollider;
+        private PhysicMaterial movementPhysicsMaterial;
         private TopDownInputAdapter inputAdapter;
         private TopDownGroundProbe groundProbe;
         private PlayerResourceController resources;
@@ -95,7 +96,6 @@ namespace RorType.Gameplay.Player
         private float highestAirY;
         private int dashCharges;
         private bool dashQueued;
-        private bool airDashConsumed;
         private bool isJumping;
         private bool isGroundedForLocomotion;
         private bool wasAirborne;
@@ -120,6 +120,8 @@ namespace RorType.Gameplay.Player
             && walkSpeed <= 0.01f && sprintSpeed <= 0.01f;
         public bool IsGrounded => isGroundedForLocomotion;
         public bool IsSprinting { get; private set; }
+        public float RootMotionPlaybackMultiplier => UsesDirectRootMotion && IsSprinting
+            ? rootMotionSprintMultiplier : 1f;
         public bool IsDashing => dashRemainingDistance > 0f;
         public int DashCharges => dashCharges;
         public int MaxDashCharges => GetMaxDashCharges();
@@ -127,6 +129,9 @@ namespace RorType.Gameplay.Player
         public Vector3 RenderPosition => visualRoot != null && visualRoot != transform && hasVisualPosition
             ? smoothedVisualWorldPosition
             : transform.position;
+
+        [Header("Root-motion sprint")]
+        [SerializeField, Min(1f)] private float rootMotionSprintMultiplier = 1.5f;
 
         private void Awake()
         {
@@ -141,9 +146,36 @@ namespace RorType.Gameplay.Player
             dashCharges = GetMaxDashCharges();
 
             body.useGravity = false;
-            body.constraints |= RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
+            body.constraints |= visualRoot != null && visualRoot != transform
+                ? RigidbodyConstraints.FreezeRotation
+                : RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
             body.interpolation = RigidbodyInterpolation.Interpolate;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+
+            if (capsuleCollider.sharedMaterial == null)
+            {
+                // The motor controls stopping. Contact friction must not catch
+                // the capsule on the ground while it is trying to move.
+                movementPhysicsMaterial = new PhysicMaterial("Player Movement")
+                {
+                    staticFriction = 0f,
+                    dynamicFriction = 0f,
+                    bounciness = 0f,
+                    frictionCombine = PhysicMaterialCombine.Minimum,
+                    bounceCombine = PhysicMaterialCombine.Minimum
+                };
+                capsuleCollider.sharedMaterial = movementPhysicsMaterial;
+            }
+        }
+
+        private void Start()
+        {
+            if (UsesDirectRootMotion)
+            {
+                // One animation sample per physics tick prevents alternating
+                // empty/double movement steps when render and physics rates differ.
+                visualAnimator.updateMode = AnimatorUpdateMode.AnimatePhysics;
+            }
         }
 
         private void Update()
@@ -241,8 +273,9 @@ namespace RorType.Gameplay.Player
                 planarVelocity = Time.fixedDeltaTime > 0f
                     ? resolvedPlanarDelta / Time.fixedDeltaTime
                     : Vector3.zero;
-                body.velocity = Vector3.zero;
-                body.MovePosition(targetPosition);
+                // Keep this dynamic body in the solver's movement path. Teleporting
+                // to the snap target makes contact resolution fight the motor.
+                body.velocity = (targetPosition - currentPosition) / Time.fixedDeltaTime;
             }
             else
             {
@@ -271,16 +304,23 @@ namespace RorType.Gameplay.Player
                 return;
             }
 
-            // The clip supplies distance, input supplies direction. Grounding and
-            // jumping own height; locomotion clips must never accumulate Y travel.
+            // The clip supplies planar distance, input supplies direction. Clip Y
+            // remains in the skeleton pose; grounding and jumping set body height.
             var direction = ResolvePlanarActionDirection(RequestedWorldMoveDirection);
             var planarDistance = new Vector2(animationDelta.x, animationDelta.z).magnitude;
-            pendingRootMotionDelta += direction * planarDistance;
+            var inputMagnitude = inputAdapter != null ? Mathf.Clamp01(inputAdapter.MoveInput.magnitude) : 0f;
+            pendingRootMotionDelta += direction * planarDistance * inputMagnitude;
         }
 
         private void OnDisable()
         {
             pendingRootMotionDelta = Vector3.zero;
+        }
+
+        private void OnDestroy()
+        {
+            if (movementPhysicsMaterial != null)
+                Destroy(movementPhysicsMaterial);
         }
 
         public void ResetMotionState()
@@ -301,7 +341,6 @@ namespace RorType.Gameplay.Player
             landingHeightSquash = 0f;
             dashCharges = GetMaxDashCharges();
             dashQueued = false;
-            airDashConsumed = false;
             isJumping = false;
             wasAirborne = false;
             externalPlanarVelocity = Vector3.zero;
@@ -332,6 +371,8 @@ namespace RorType.Gameplay.Player
 
             body.WakeUp();
         }
+
+        public Vector3 ResolveWorldInputDirection(Vector2 input) => ResolveWorldMoveDirection(input);
 
         private Vector3 ResolveWorldMoveDirection(Vector2 moveInput)
         {
@@ -393,18 +434,11 @@ namespace RorType.Gameplay.Player
             fallLandingThreshold = Mathf.Max(0f, fallLandingThreshold);
         }
 
-        private float ResolveGroundedBodyPositionY()
+        private float ResolveGroundedBodyPositionY(
+            Vector3 bodyPosition, Vector3 groundPoint, Vector3 groundNormal)
         {
-            return ResolveGroundedBodyPositionY(groundProbe.GroundPoint);
-        }
-
-        private float ResolveGroundedBodyPositionY(Vector3 groundPoint)
-        {
-            var lossyScale = transform.lossyScale;
-            var halfHeight = capsuleCollider.height * Mathf.Abs(lossyScale.y) * 0.5f;
-            var centerOffset = capsuleCollider.center.y * Mathf.Abs(lossyScale.y);
-            var bottomToPivot = halfHeight - centerOffset;
-            return groundPoint.y + bottomToPivot + groundSnapOffset;
+            return bodyPosition.y - groundProbe.GetGroundClearance(bodyPosition, groundPoint, groundNormal)
+                + groundSnapOffset;
         }
 
         private Vector3 ResolveGroundedTargetPosition(Vector3 targetPosition)
@@ -413,43 +447,66 @@ namespace RorType.Gameplay.Player
                     targetPosition,
                     groundedSlopeSnapDistance,
                     out var sampledGroundPoint,
-                    out _))
+                    out var sampledGroundNormal))
             {
-                targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+                targetPosition.y = ResolveGroundedBodyPositionY(targetPosition, sampledGroundPoint, sampledGroundNormal);
                 return targetPosition;
             }
 
-            targetPosition.y = ResolveGroundedBodyPositionY();
+            targetPosition.y = ResolveGroundedBodyPositionY(targetPosition, groundProbe.GroundPoint, groundProbe.GroundNormal);
             return targetPosition;
         }
 
         private Vector3 ResolveCollisionAwareGroundedPosition(
             Vector3 currentPosition, Vector3 targetPosition, CapsuleCollider queryCollider = null)
         {
-            var movementDelta = targetPosition - currentPosition;
-            var distance = movementDelta.magnitude;
-            if (distance <= 0.0001f || body == null)
+            var remainingDelta = targetPosition - currentPosition;
+            if (remainingDelta.sqrMagnitude <= 0.00000001f || body == null)
             {
                 return targetPosition;
             }
 
-            var direction = movementDelta / distance;
             if (IsDashing)
             {
                 // Capsule casts do not report objects already touching/overlapping
                 // the character at the start of the dash step.
-                ApplyOverlappingDashImpacts(currentPosition, direction, queryCollider);
+                ApplyOverlappingDashImpacts(currentPosition, remainingDelta.normalized, queryCollider);
             }
 
-            if (!TryGetMovementBlocker(currentPosition, direction, distance + wallSkinWidth, out var hit, queryCollider))
+            var resolvedPosition = currentPosition;
+            for (var iteration = 0; iteration < 3; iteration++)
             {
-                return targetPosition;
+                var distance = remainingDelta.magnitude;
+                if (distance <= 0.0001f)
+                    break;
+
+                var direction = remainingDelta / distance;
+                if (!TryGetMovementBlocker(
+                        resolvedPosition, direction, distance + wallSkinWidth, out var hit, queryCollider))
+                {
+                    resolvedPosition += remainingDelta;
+                    break;
+                }
+
+                TryApplyDashImpact(hit.collider, hit.point, direction);
+
+                var allowedDistance = Mathf.Clamp(hit.distance - wallSkinWidth, 0f, distance);
+                var travelledDelta = direction * allowedDistance;
+                resolvedPosition += travelledDelta;
+                remainingDelta -= travelledDelta;
+
+                // Distance-controlled actions still stop on impact. Walking keeps
+                // the tangential part of the step instead of sticking to the wall.
+                if (IsDashing || isJumping)
+                    break;
+
+                var wallNormal = Vector3.ProjectOnPlane(hit.normal, Vector3.up);
+                if (wallNormal.sqrMagnitude <= 0.0001f)
+                    break;
+
+                remainingDelta = Vector3.ProjectOnPlane(remainingDelta, wallNormal.normalized);
             }
 
-            TryApplyDashImpact(hit.collider, hit.point, direction);
-
-            var allowedDistance = Mathf.Max(0f, hit.distance - wallSkinWidth);
-            var resolvedPosition = currentPosition + (direction * Mathf.Min(distance, allowedDistance));
             resolvedPosition.y = targetPosition.y;
             return resolvedPosition;
         }
@@ -568,6 +625,12 @@ namespace RorType.Gameplay.Player
                     continue;
                 }
 
+                // Touching a surface must not block travel parallel to or away from it.
+                if (Vector3.Dot(direction, candidate.normal) >= -0.0001f)
+                {
+                    continue;
+                }
+
                 if (candidate.distance < closestDistance)
                 {
                     closestDistance = candidate.distance;
@@ -617,6 +680,14 @@ namespace RorType.Gameplay.Player
                         candidate.transform.rotation,
                         out var separationDirection,
                         out var separationDistance))
+                {
+                    continue;
+                }
+
+                // Ground snap owns walkable slopes. Flattening their upward
+                // separation normal into XZ turns tiny floor contacts into shoves.
+                if (groundProbe.IsGroundCollider(candidate)
+                    && groundProbe.IsStableSurfaceNormal(separationDirection))
                 {
                     continue;
                 }
@@ -747,7 +818,6 @@ namespace RorType.Gameplay.Player
 
                 wasAirborne = false;
                 coyoteTimer = coyoteTime;
-                airDashConsumed = false;
                 if (!IsDashing)
                 {
                     verticalVelocity = 0f;
@@ -785,7 +855,7 @@ namespace RorType.Gameplay.Player
             jumpDirection = ResolveJumpDirection();
             jumpRemainingDistance = jumpDistance;
             jumpBaseBodyY = groundProbe.IsStableGround
-                ? ResolveGroundedBodyPositionY(groundProbe.GroundPoint)
+                ? ResolveGroundedBodyPositionY(body.position, groundProbe.GroundPoint, groundProbe.GroundNormal)
                 : body.position.y;
             isJumping = true;
             isGroundedForLocomotion = false;
@@ -842,11 +912,6 @@ namespace RorType.Gameplay.Player
             if (dashCharges < effectiveMaxDashCharges && dashChargeRecoveryTimer <= 0f)
             {
                 dashChargeRecoveryTimer = dashChargeRecoveryTime;
-            }
-
-            if (!isGroundedForLocomotion && coyoteTimer <= 0f)
-            {
-                airDashConsumed = true;
             }
         }
 
@@ -1007,14 +1072,14 @@ namespace RorType.Gameplay.Player
                 groundSamplePosition,
                 GetDistanceControlledGroundSampleDistance(plannedPlanarStep),
                 out var sampledGroundPoint,
-                out _);
+                out var sampledGroundNormal);
 
             if (isJumping)
             {
                 var jumpProgress = GetJumpProgress();
                 var arcOffset = EvaluateJumpArc(jumpProgress);
                 var baseBodyY = hasStableGroundBelow
-                    ? ResolveGroundedBodyPositionY(sampledGroundPoint)
+                    ? ResolveGroundedBodyPositionY(groundSamplePosition, sampledGroundPoint, sampledGroundNormal)
                     : jumpBaseBodyY;
                 jumpBaseBodyY = baseBodyY;
                 targetPosition.y = baseBodyY + arcOffset;
@@ -1023,7 +1088,7 @@ namespace RorType.Gameplay.Player
                 {
                     if (hasStableGroundBelow)
                     {
-                        targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+                        targetPosition.y = ResolveGroundedBodyPositionY(groundSamplePosition, sampledGroundPoint, sampledGroundNormal);
                         TriggerLandingSquash(jumpLandingHeightSquash);
                         wasAirborne = false;
                         highestAirY = targetPosition.y;
@@ -1036,7 +1101,7 @@ namespace RorType.Gameplay.Player
             }
             else if (isGroundedForLocomotion && hasStableGroundBelow)
             {
-                targetPosition.y = ResolveGroundedBodyPositionY(sampledGroundPoint);
+                targetPosition.y = ResolveGroundedBodyPositionY(groundSamplePosition, sampledGroundPoint, sampledGroundNormal);
             }
             else
             {
@@ -1049,8 +1114,7 @@ namespace RorType.Gameplay.Player
                 targetPosition = ResolvePenetrationFreePosition(targetPosition);
             }
 
-            body.velocity = Vector3.zero;
-            body.MovePosition(targetPosition);
+            body.velocity = (targetPosition - currentPosition) / Mathf.Max(0.0001f, deltaTime);
 
             planarVelocity = Vector3.zero;
             CurrentSpeed = actualPlanarStep.magnitude / Mathf.Max(0.0001f, deltaTime);

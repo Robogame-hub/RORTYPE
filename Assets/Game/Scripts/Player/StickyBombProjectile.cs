@@ -7,6 +7,31 @@ namespace RorType.Gameplay.Player
     [RequireComponent(typeof(SphereCollider))]
     public sealed class StickyBombProjectile : MonoBehaviour
     {
+        [SerializeField] private TransientScaleEffect explosionVisualPrefab;
+        private bool hasGroundDestination;
+        private Vector3 groundDestination;
+
+        public void SetGroundDestination(Vector3 point)
+        {
+            groundDestination = point;
+            hasGroundDestination = true;
+        }
+
+        private void FixedUpdate()
+        {
+            if (!hasGroundDestination || !isInitialized || isStuck || hasExploded) return;
+            var remaining = Vector3.ProjectOnPlane(groundDestination - body.position, Vector3.up);
+            if (Vector3.Dot(remaining, body.velocity) <= 0f
+                || remaining.magnitude <= body.velocity.magnitude * Time.fixedDeltaTime + 0.3f)
+            {
+                isStuck = true;
+                stuckTimer = 0f;
+                body.velocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                body.isKinematic = true;
+                body.position = groundDestination + Vector3.up * 0.3f;
+            }
+        }
         private const int ExplosionHitBufferSize = 32;
 
         private readonly Collider[] explosionHitBuffer = new Collider[ExplosionHitBufferSize];
@@ -20,7 +45,6 @@ namespace RorType.Gameplay.Player
         private float explosionDamage;
         private float explosionImpulse;
         private float explosionVisualLifetime;
-        private Color explosionColor;
         private GameObject instigator;
         private Transform instigatorRoot;
         private CombatTeam sourceTeam;
@@ -45,7 +69,6 @@ namespace RorType.Gameplay.Player
             float damageAmount,
             float impulse,
             float visualLifetime,
-            Color color,
             GameObject sourceInstigator,
             CombatTeam team)
         {
@@ -64,7 +87,6 @@ namespace RorType.Gameplay.Player
             explosionDamage = Mathf.Max(0f, damageAmount);
             explosionImpulse = Mathf.Max(0f, impulse);
             explosionVisualLifetime = Mathf.Max(0.05f, visualLifetime);
-            explosionColor = color;
             instigator = sourceInstigator;
             instigatorRoot = sourceInstigator != null ? sourceInstigator.transform.root : null;
             sourceTeam = team;
@@ -273,25 +295,8 @@ namespace RorType.Gameplay.Player
 
         private void SpawnExplosionVisual()
         {
-            var explosion = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            explosion.name = "PlayerStickyBombExplosion";
-            explosion.transform.position = transform.position;
-            explosion.transform.localScale = Vector3.one * 0.1f;
-
-            var explosionCollider = explosion.GetComponent<Collider>();
-            if (explosionCollider != null)
-            {
-                explosionCollider.enabled = false;
-                Destroy(explosionCollider);
-            }
-
-            var renderer = explosion.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                RuntimeRendererUtility.SetColor(renderer, explosionColor);
-            }
-
-            var effect = explosion.AddComponent<TransientScaleEffect>();
+            if (explosionVisualPrefab == null) return;
+            var effect = Instantiate(explosionVisualPrefab, transform.position, Quaternion.identity);
             effect.Initialize(
                 Vector3.one * 0.1f,
                 Vector3.one * explosionVisualRadius,

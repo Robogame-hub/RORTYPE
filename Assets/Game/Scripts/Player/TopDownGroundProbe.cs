@@ -15,6 +15,7 @@ namespace RorType.Gameplay.Player
         [SerializeField, Min(0f)] private float groundedDistanceTolerance = 0.08f;
 
         private CapsuleCollider capsuleCollider;
+        private Rigidbody body;
 
         public bool IsGrounded { get; private set; }
         public bool IsStableGround { get; private set; }
@@ -23,16 +24,18 @@ namespace RorType.Gameplay.Player
         public float GroundDistance { get; private set; } = float.PositiveInfinity;
         public float SlopeAngle { get; private set; }
         public float MaxSlopeAngle => maxSlopeAngle;
+        public int GroundLayerMask => ResolveGroundMask();
 
         private void Awake()
         {
             capsuleCollider = GetComponent<CapsuleCollider>();
+            body = GetComponent<Rigidbody>();
         }
 
         public void Probe()
         {
             if (TrySampleGround(
-                    transform.position,
+                    body != null ? body.position : transform.position,
                     out var sampledPoint,
                     out var sampledNormal,
                     out var sampledDistance,
@@ -63,6 +66,22 @@ namespace RorType.Gameplay.Player
         public bool IsGroundCollider(Collider candidate)
         {
             return candidate != null && ((1 << candidate.gameObject.layer) & ResolveGroundMask()) != 0;
+        }
+
+        public float GetGroundClearance(Vector3 bodyPosition, Vector3 groundPoint, Vector3 groundNormal)
+        {
+            if (groundNormal.y <= 0.0001f)
+                return float.PositiveInfinity;
+
+            var scale = transform.lossyScale;
+            var radius = capsuleCollider.radius * Mathf.Max(Mathf.Abs(scale.x), Mathf.Abs(scale.z));
+            var halfHeight = Mathf.Max(capsuleCollider.height * Mathf.Abs(scale.y) * 0.5f, radius);
+            var bottomSphereCenter = bodyPosition + transform.TransformVector(capsuleCollider.center)
+                - Vector3.up * (halfHeight - radius);
+
+            // Signed vertical clearance of the full capsule above the sampled plane.
+            // A slope touches the side of the rounded foot, not its lowest point.
+            return (Vector3.Dot(bottomSphereCenter - groundPoint, groundNormal) - radius) / groundNormal.y;
         }
 
         public bool TrySampleStableGround(Vector3 bodyPosition, out Vector3 groundPoint, out Vector3 groundNormal)
@@ -140,7 +159,7 @@ namespace RorType.Gameplay.Player
             {
                 groundPoint = bestHit.point;
                 groundNormal = bestHit.normal.normalized;
-                groundDistance = Mathf.Max(0f, (bottomHemisphereCenter - (Vector3.up * radius)).y - groundPoint.y);
+                groundDistance = Mathf.Max(0f, GetGroundClearance(bodyPosition, groundPoint, groundNormal));
                 slopeAngle = Vector3.Angle(groundNormal, Vector3.up);
                 return true;
             }
